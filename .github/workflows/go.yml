@@ -25,4 +25,4 @@ jobs:
 
       run: |
         cd tools
-        go build -v ./rpeat-server
+        go build -v ./rpeat-server.go
