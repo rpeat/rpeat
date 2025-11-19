@@ -15,7 +15,7 @@
 > Visit us at [rpeat.io](https://rpeat.io) and [rpeat.io/docs](https://rpeat.io/docs)
 
 
-**rpeat** was born out of necessity. In a heterogenous world, where no single language
+**rpeat** was born out of necessity. In a heterogeneous world, where no single language
 rules them all, we needed a way to run everything from servers to scripts in one place.
 The mandate was simple: language agnostic, dead simple to use, and enough functions to
 get the job done, without being complicated to set up or use.
