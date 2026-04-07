@@ -932,7 +932,8 @@ async function updateJob(id, job, update, imgpath="assets") {
   var endstate = ["success","manualsuccess","end","failed","retrywait","retryfailed","stopped","missed"];
   var errstate = ["failed","retryfailed","retryfailed","stopped","missedwarning"];
   if (errstate.includes(job["JobStateString"])) {
-    playAlert();
+    // disable audible alerts for the moment
+    //playAlert();
   }
   if (job["JobStateString"] == "restart") {
     await sleep(1000)

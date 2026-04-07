@@ -577,7 +577,6 @@ func expandAllVars(job *Job, vars []string, cmd *string, shutdown bool, asof str
 			missing = append(missing, keyval)
 		}
 		env[i] = fmt.Sprintf("%s=%s", k, newv)
-		os.Setenv(k, newv)
 		EnvMap[k] = newv
 	}
 	evo.envVarsMissing = missing
@@ -601,7 +600,7 @@ func expandAllVars(job *Job, vars []string, cmd *string, shutdown bool, asof str
 		cmdEvalString := os.Expand(strings.Join(c.Args, " "),
 			func(key string) string {
 				cmdvars++
-				v := os.Getenv(key)
+				v := getenv(key)
 				if v == "" {
 					cmdmissing = append(cmdmissing, key)
 				}
@@ -612,7 +611,7 @@ func expandAllVars(job *Job, vars []string, cmd *string, shutdown bool, asof str
 		} else {
 			job.CmdEval = cmdEvalString
 		}
-		evo.execErr = isExecutable(os.ExpandEnv(c.Path))
+		evo.execErr = isExecutable(os.Expand(c.Path, getenv))
 	}
 	evo.execCmd = c
 	evo.cmdVarsMissing = cmdmissing
@@ -621,7 +620,7 @@ func expandAllVars(job *Job, vars []string, cmd *string, shutdown bool, asof str
 	// now get newly set variables
 	var expandedVars []string
 	for _, v := range vars {
-		expandedVars = append(expandedVars, os.ExpandEnv(v))
+		expandedVars = append(expandedVars, os.Expand(v, getenv))
 	}
 	evo.expandedVars = expandedVars
 
@@ -634,16 +633,6 @@ func expandAllVars(job *Job, vars []string, cmd *string, shutdown bool, asof str
 	//      numberCmdVars:cmdvars,
 	//  }
 	//  evo.execErr = isExecutable(os.ExpandEnv(c.Path))
-
-	// reset environment back to original
-	for _, p := range env {
-		kv := strings.Split(p, "=")
-		os.Unsetenv(kv[0])
-	}
-	for _, p := range env_original {
-		kv := strings.Split(p, "=")
-		os.Setenv(kv[0], kv[1])
-	}
 
 	return evo, nil
 
