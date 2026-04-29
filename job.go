@@ -552,7 +552,7 @@ type Job struct {
 	History            []JobHistory `json:"History,omitempty"`
 	//FullHistory []JobHistory `json:"-"`
 	StartedUNIX   int64 `json:"StartedUNIX,omitempty"`
-	PrevStopUNIX   int64 `json:"PrevStopUNIX,omitempty"`
+	PrevStopUNIX  int64 `json:"PrevStopUNIX,omitempty"`
 	NextStartUNIX int64 `json:"NextStartUNIX,omitempty"`
 	StdoutFile    []string
 	StderrFile    []string
@@ -695,6 +695,7 @@ func (job *Job) addHistory() {
 func (h JobHistory) isNull() bool {
 	return h.RunUUID == "00000000-0000-0000-0000-000000000000"
 }
+
 /* TODO: getHistory */
 func (job *Job) getLogs(runid string) (stdout string, stderr string) {
 	ServerLogger.Printf("[ getLogging for %s ] %s", runid, job.JobUUID)
@@ -750,7 +751,6 @@ func (job *Job) SaveSnapshot(compress bool) {
 	if err != nil {
 		ServerLogger.Fatal("error saving job", err.Error())
 	}
-	ServerLogger.Printf("Saving job to %s", jobfile)
 
 	var buf bytes.Buffer
 	if compress {
@@ -758,7 +758,15 @@ func (job *Job) SaveSnapshot(compress bool) {
 	} else {
 		job.Serialize(&buf)
 	}
-	ioutil.WriteFile(jobfile, buf.Bytes(), os.FileMode(0600))
+	err = ioutil.WriteFile(jobfile+".tmp", buf.Bytes(), os.FileMode(0600))
+	if err != nil {
+		ServerLogger.Println("snapshot write failed", job.JobUUID, err.Error())
+	}
+	err = os.Rename(jobfile+".tmp", jobfile)
+	if err != nil {
+		ServerLogger.Println("jobstate file failed atomic rewrite", job.JobUUID, err.Error())
+	}
+	ServerLogger.Printf("Saved %s job to %s", job.Name, jobfile)
 }
 func (job *Job) SerializeGZ(buf *bytes.Buffer) {
 	encoder := gob.NewEncoder(buf)
@@ -909,7 +917,7 @@ type JobUpdateParams struct {
 	RequireCal         *bool
 	PrevStart          *string
 	PrevStop           *string
-	PrevStopUNIX        *int64
+	PrevStopUNIX       *int64
 	Elapsed            *string
 	Started            *string
 	StartedUNIX        *int64
@@ -1184,8 +1192,8 @@ func (job *Job) setJobState(s JState) error {
 		job.addHistory()
 	case JMissedWarning:
 		ServerLogger.Printf("checking for MissedReset: %s", job.MissedReset)
-        //_, filename, line, _ := runtime.Caller(1)
-        //ServerLogger.Printf("[error] %s:%d", filename, line)
+		//_, filename, line, _ := runtime.Caller(1)
+		//ServerLogger.Printf("[error] %s:%d", filename, line)
 		if job.MissedReset != "" {
 			if !job.Hold && job.JobState != JRetrying {
 				d, _ := time.ParseDuration(job.MissedReset)
@@ -1197,7 +1205,7 @@ func (job *Job) setJobState(s JState) error {
 				}
 			}
 		} else {
-			// in the case of MissedWarning jobs, never set them to be held
+			ServerLogger.Printf("MissedWarning detected on %s - ignoring", job.JobUUID)
 			//job.setHold(true)
 		}
 		job.addHistory()
@@ -1229,15 +1237,14 @@ func (job *Job) setJobState(s JState) error {
 func (job *Job) WaitForTrigger(stop <-chan bool) error {
 	ServerLogger.Printf(InfoColor, fmt.Sprintf("Waiting for Trigger %s:%s (%s)", job.JobUUID, job.Name, job.JobState))
 	ticker := time.NewTicker(time.Second * 15)
-    defer ticker.Stop()
+	defer ticker.Stop()
 	lastTick := time.Now().Unix()
 	for {
 		select {
 		case <-ticker.C:
 			now := time.Now().Unix()
 			if now-lastTick > 30 {
-				// Skip setting the job as missed here
-				// TODO: might want to add some logging here
+				ServerLogger.Printf(WarningColor,fmt.Sprintf("Waiting for Trigger %s:%s (%s)", job.JobUUID, job.Name, job.JobState))
 				//job.setJobState(JMissedWarning)
 				return nil
 			}
