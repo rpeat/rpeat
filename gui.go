@@ -130,6 +130,11 @@ var JobViewHTML = `
   {{ template "ws" . }}
 </script>
 
+<div id="popup" onclick="showPopup();">
+    <div id="popup-content" class="show-popup">
+    </div>
+</div>
+
 </body>
 </html>`
 
@@ -685,28 +690,28 @@ function reqServerInfo() {
       let njobs = Object.values(count).reduce((x,s) => x+s);
       count.allsuccess = (count.success+count.manualsuccess+count.end);
       Object.entries(count).forEach( ([k,v]) => { count[k] = v > 0 ? "<span class=server-status-count>"+v+"</span>" : "" } );
-      var info = "<div>Server Details<hr><br></div>";
+      var info = "<div class='font-family: sans-serif;'>Server Details<hr><br></div>";
       info += "<table id='server-details'>";
       info += "<tr class=server-details-header><td colspan=2 >running</td><td colspan=2>retrying</td><td colspan=2>holding</td><td colspan=2>TOTAL</td></tr>";
       info += "<tr>";
-      info += "<td><img src='/assets/running.png' alt=''></td><td>"+count.running+"</td>";
-      info += "<td><img src='/assets/retrywait.png' alt=''></td><td>"+count.retrywait+"</td>";
-      info += "<td><img src='/assets/onhold.png' alt=''></td><td>"+count.onhold+"</td>";
-      info += "<td><img src='/assets/ready.png' alt=''></td><td>"+njobs+"</td>";
+      info += "<td><img class=kstate-img src='/assets/running.png' alt=''></td><td>"+count.running+"</td>";
+      info += "<td><img class=kstate-img src='/assets/retrywait.png' alt=''></td><td>"+count.retrywait+"</td>";
+      info += "<td><img class=kstate-img src='/assets/onhold.png' alt=''></td><td>"+count.onhold+"</td>";
+      info += "<td><img class=kstate-img src='/assets/ready.png' alt=''></td><td>"+njobs+"</td>";
       info += "</tr>";
       info += "<tr class=server-details-header><td colspan=2 >success</td><td colspan=2>failed</td><td colspan=2>stopped</td><td colspan=2>warning</td></tr>";
       info += "<tr>";
-      info += "<td><img src='/assets/success.png' alt=''></td><td>"+count.allsuccess+"</td>";
-      info += "<td><img src='/assets/failed.png' alt=''></td><td>"+count.failed+"</td>";
-      info += "<td><img src='/assets/stopped.png' alt=''></td><td>"+count.stopped+"</td>";
-      info += "<td><img src='/assets/warning.png' alt=''></td><td>"+count.warning+"</td>";
+      info += "<td><img class=kstate-img src='/assets/success.png' alt=''></td><td>"+count.allsuccess+"</td>";
+      info += "<td><img class=kstate-img src='/assets/failed.png' alt=''></td><td>"+count.failed+"</td>";
+      info += "<td><img class=kstate-img src='/assets/stopped.png' alt=''></td><td>"+count.stopped+"</td>";
+      info += "<td><img class=kstate-img src='/assets/warning.png' alt=''></td><td>"+count.warning+"</td>";
       info += "</tr>";
       info += "<tr class=server-details-header><td colspan=2 ></td><td colspan=2>dep failed</td><td colspan=2>dep warning</td><td colspan=2>missed</td></tr>";
       info += "<tr>";
       info += "<td></td><td></td>";
-      info += "<td><img src='/assets/depfailed.png' alt=''></td><td>"+count.depfailed+"</td>";
-      info += "<td><img src='/assets/depwarning.png' alt=''></td><td>"+count.depwarning+"</td>";
-      info += "<td><img src='/assets/missedwarning.png' alt=''></td><td>"+count.missedwarning+"</td>";
+      info += "<td><img class=kstate-img src='/assets/depfailed.png' alt=''></td><td>"+count.depfailed+"</td>";
+      info += "<td><img class=kstate-img src='/assets/depwarning.png' alt=''></td><td>"+count.depwarning+"</td>";
+      info += "<td><img class=kstate-img src='/assets/missedwarning.png' alt=''></td><td>"+count.missedwarning+"</td>";
       info += "</tr>";
       info += "</table>";
       document.getElementById("popup-content").innerHTML = info;
@@ -1530,12 +1535,12 @@ tbody tr:nth-child(odd):not(:first-child) {
   font-size: 80%;
   font-weight: normal;
 }
-button.inspect-button { border: none; height: 20px; width: 16px; background-image: url("/assets/inspect.png"); background-size: cover; background-position: center; background-repeat: no-repeat; }
-button.hold-button    { border: none; height: 1em; width: 1em; background-image: url("/assets/hold.png")   ; background-size: cover; background-position: center; background-repeat: no-repeat; }
-button.resume-button  { border: none; height: 1em; width: 1em; background-image: url("/assets/resume.png") ; background-size: cover; background-position: center; background-repeat: no-repeat; }
-button.start-button   { border: none; height: 1em; width: 1em; background-image: url("/assets/start.png")  ; background-size: cover; background-position: center; background-repeat: no-repeat; }
-button.stop-button    { border: none; height: 1em; width: 1em; background-image: url("/assets/stop.png")   ; background-size: cover; background-position: center; background-repeat: no-repeat; }
-button.restart-button { border: none; height: 1em; width: 1em; background-image: url("/assets/restart.png"); background-size: cover; background-position: center; background-repeat: no-repeat; }
+button.inspect-button { border: none; height: 20px; width: 16px; background-image: url("/assets/inspect.png"); background-size: 90%; background-position: center; background-repeat: no-repeat; }
+button.hold-button    { border: none; height: 1em; width: 1em; background-image: url("/assets/hold.png")   ; background-size: 90%; background-position: center; background-repeat: no-repeat; }
+button.resume-button  { border: none; height: 1em; width: 1em; background-image: url("/assets/resume.png") ; background-size: 90%; background-position: center; background-repeat: no-repeat; }
+button.start-button   { border: none; height: 1em; width: 1em; background-image: url("/assets/start.png")  ; background-size: 90%; background-position: center; background-repeat: no-repeat; }
+button.stop-button    { border: none; height: 1em; width: 1em; background-image: url("/assets/stop.png")   ; background-size: 90%; background-position: center; background-repeat: no-repeat; }
+button.restart-button { border: none; height: 1em; width: 1em; background-image: url("/assets/restart.png"); background-size: 90%; background-position: center; background-repeat: no-repeat; }
 
 th.controls {
   padding-left: 0px;
