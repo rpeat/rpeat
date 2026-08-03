@@ -476,6 +476,7 @@ func (server ServerConfig) startJobs(sd *ServerData) {
 		ServerLogger.Println("registering signal watcher")
 		select {
 		case interrupt, _ := <-sigCh:
+			fmt.Println()
 			ServerLogger.Printf("[ %s ] caught - shutting jobs down", interrupt)
 		case <-unwatch:
 			ServerLogger.Println("unwatching signal watcher")

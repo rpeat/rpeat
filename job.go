@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/gob"
+	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -159,7 +160,6 @@ type KConfig interface {
 }
 
 // JobSpec is the primary rpeat configuration for an individual job. At a minimum, only a Cmd needs to be specified.
-//
 type JobSpec struct {
 	// job definition
 
@@ -752,11 +752,15 @@ func (job *Job) SaveSnapshot(compress bool) {
 		ServerLogger.Fatal("error saving job", err.Error())
 	}
 
+	var job_ Job
+	data, _ := json.Marshal(job)
+	json.Unmarshal(data, &job_)
+
 	var buf bytes.Buffer
 	if compress {
-		job.SerializeGZ(&buf)
+		job_.SerializeGZ(&buf)
 	} else {
-		job.Serialize(&buf)
+		job_.Serialize(&buf)
 	}
 	err = ioutil.WriteFile(jobfile+".tmp", buf.Bytes(), os.FileMode(0600))
 	if err != nil {
@@ -768,7 +772,7 @@ func (job *Job) SaveSnapshot(compress bool) {
 	}
 	ServerLogger.Printf("Saved %s job to %s", job.Name, jobfile)
 }
-func (job *Job) SerializeGZ(buf *bytes.Buffer) {
+func (job Job) SerializeGZ(buf *bytes.Buffer) {
 	encoder := gob.NewEncoder(buf)
 	err := encoder.Encode(job)
 	if err != nil {
@@ -781,7 +785,7 @@ func (job *Job) SerializeGZ(buf *bytes.Buffer) {
 	*buf = gzb
 }
 
-func (job *Job) Serialize(buf *bytes.Buffer) {
+func (job Job) Serialize(buf *bytes.Buffer) {
 	encoder := gob.NewEncoder(buf)
 	err := encoder.Encode(job)
 	if err != nil {
@@ -1244,7 +1248,7 @@ func (job *Job) WaitForTrigger(stop <-chan bool) error {
 		case <-ticker.C:
 			now := time.Now().Unix()
 			if now-lastTick > 30 {
-				ServerLogger.Printf(WarningColor,fmt.Sprintf("Waiting for Trigger %s:%s (%s)", job.JobUUID, job.Name, job.JobState))
+				ServerLogger.Printf(WarningColor, fmt.Sprintf("Waiting for Trigger %s:%s (%s)", job.JobUUID, job.Name, job.JobState))
 				//job.setJobState(JMissedWarning)
 				return nil
 			}
