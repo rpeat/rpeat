@@ -475,8 +475,8 @@ func (server ServerConfig) startJobs(sd *ServerData) {
 	go func(sigCh chan os.Signal, jobs jobMap, home, port string, unwatch <-chan bool) {
 		ServerLogger.Println("registering signal watcher")
 		select {
-		case <-sigCh:
-			ServerLogger.Println("INTERRUPT caught - shutting jobs down")
+		case interrupt, _ := <-sigCh:
+			ServerLogger.Printf("[ %s ] caught - shutting jobs down", interrupt)
 		case <-unwatch:
 			ServerLogger.Println("unwatching signal watcher")
 			return

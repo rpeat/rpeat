@@ -546,7 +546,7 @@ func runTik(job *Job, pid chan int, retry bool) {
 		}
 	}
 	job.ExitCode = errcode
-	job.sendUpdate()
+	//job.sendUpdate()
 	//job.resetContingency()
 	job.Unscheduled = false
 

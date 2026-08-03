@@ -179,7 +179,7 @@ func HistoryBars(job Job) template.HTML {
 	bars := make([]string, 0, len(job.History))
 	for _, h := range job.History {
 		if !h.isNull() {
-			jobstate := fmt.Sprintf(`<img src="/assets/%s.png" alt="%s">`, h.JobStateString, h.JobStateString)
+			jobstate := fmt.Sprintf(`<img class=kstate-img src="/assets/%s.png" alt="%s">`, h.JobStateString, h.JobStateString)
 			bars = append(bars, fmt.Sprintf(`<tr class=history-row id="%s" onclick="openLog('%s','%s',100);"><td class=runuuid>%s</td><td class=nextstart>%s</td><td class=nextstart>%s</td><td class=elapsed>%s</td><td class="kstate k%s">%s</td><td>%d</td><td>view log</td></tr>`,
 				h.RunUUID, job.JobUUID.String(), h.RunUUID, h.RunUUID, h.Start, h.Stop, h.Elapsed, h.JobStateString, jobstate, h.ExitCode))
 		} else {
@@ -288,7 +288,7 @@ var JobView = `
   <td class=started data-unix={{ .Job.StartedUNIX }}>{{ .Job.Started }}</td>
   <td class="kstate k{{ .Job.JobState }}">
     <span class=dropdown>
-      <img src="/assets/{{ .Job.JobState }}.png" alt="{{ .Job.JobState }}">
+      <img style="height: 18px;" src="/assets/{{ .Job.JobState }}.png" alt="{{ .Job.JobState }}">
     </span>
   </td>
   {{ $perms := index .Authorized .UUID }}
@@ -822,6 +822,7 @@ function jobstateAbb(stateString) {
 function updateHistoryTable(job) {}
 
 function updateHistory(id, job) {
+  console.log("updateHistory: "+id);
   if (job === null) {
      return;
   }
@@ -831,7 +832,8 @@ function updateHistory(id, job) {
       var e = document.getElementById(id)
       if (element.JobStateString != "") {
         var jss = element.JobStateString;
-        e.querySelector(".history-trail").innerHTML = inner + "<span class=dropdown id='"+element.RunUUID+"'><img src='/assets/"+jss+".png' alt=''><div class='dropdown-content'><div>state: "+jss+"</div><hr/><div>start: "+element.Start+"</div><div>stop: "+element.Stop+"</div><div>elapsed: "+element.Elapsed+"</div><div>unscheduled: "+element.Unscheduled+"</div><div>exitCode: "+element.ExitCode+"</div></div></span>";
+        e.querySelector(".history-trail").innerHTML = inner + "<span class=dropdown id='"+element.RunUUID+"'><img class=kstate-img src='/assets/"+jss+".png' alt=''><div class='dropdown-content'><div>state: "+jss+"</div><hr/><div>start: "+element.Start+"</div><div>stop: "+element.Stop+"</div><div>elapsed: "+element.Elapsed+"</div><div>unscheduled: "+element.Unscheduled+"</div><div>exitCode: "+element.ExitCode+"</div></div></span>";
+        console.log(e.querySelector(".history-trail").innerHTML);
         inner = e.querySelector(".history-trail").innerHTML;
       }
   });
@@ -896,6 +898,7 @@ function updateControls(id, controls) {
 var runuuid = {};
 async function updateJob(id, job, update, imgpath="assets") {
   // td. elems are in tables, a. elems are in dropdowns
+  console.log("inside updateJob");
   j = document.getElementById(id)
   if(j === null) return;
   updateInnerHTML(j.querySelector("a.nextstart"), job["NextStart"]);
@@ -978,7 +981,7 @@ async function updateJob(id, job, update, imgpath="assets") {
       cell.innerHTML = prevjob["Elapsed"];
       cell = row.insertCell(4);
       cell.className = "kstate k"+prevjob["JobStateString"];
-      cell.innerHTML = '<img src="/assets/'+jstate+'.png" alt="'+jstate+'">'
+      cell.innerHTML = '<img class=kstate-img src="/assets/'+jstate+'.png" alt="'+jstate+'">'
       cell = row.insertCell(5);
       cell.innerHTML = prevjob["ExitCode"];
       cell = row.insertCell(6);
@@ -1313,6 +1316,7 @@ button.server-reconnect {
 #dashboard { padding-bottom: 100px; }
 // table styling
 table,th,td {
+  height: 20px;
   padding: .1ch;
   text-align: center;
   font-family: sans-serif;
@@ -1358,6 +1362,7 @@ table.job-info, table.history-table {
 }
 
 td.elapsed, td.calendar, td.prevelapsed, td.kstate, td.retryattempt, td.pid {
+  vertical-align: middle;
   text-align: center;
 }
 td.elapsed, th.elapsed {
@@ -1434,30 +1439,36 @@ td.timezone, th.timezone {
   text-align: center;
 }
 td.kstate, th.kstate {
-  width: 20px;
+  vertical-align: middle;
+  width: 1em;
   text-align: center;
 }
 .kstate span>img {
+  height: 18px;
   display: inline-block;
-  height: 100%;
+  vertical-align: middle;
+}
+.kstate-img {
+  height: 18px;
+  display: inline-block;
   vertical-align: middle;
 }
 .history-trail {
+  vertical-align: middle;
   width: 205px;
   text-align: left;
 }
 .history-trail span {
   display: inline-block;
-  height: 100%;
-  vertical-align: middle;
+  height: 20px;
   white-space: normal;
   text-align: left;
-  margin: 0px 2px 0px 2px;
+  margin: 0px 1px 0px 2px;
   padding: 0 0 0 0;
 }
 .history-trail span>img {
+  height: 18px;
   display: inline-block;
-  height: 100%;
   vertical-align: middle;
 }
 .history-trail span>div { padding-left:5px; }
@@ -1519,12 +1530,12 @@ tbody tr:nth-child(odd):not(:first-child) {
   font-size: 80%;
   font-weight: normal;
 }
-button.inspect-button { border: none; height: 20px; width: 16px; background-image: url("/assets/inspect.png"); background-repeat: no-repeat; }
-button.hold-button    { border: none; height: 20px; width: 28px; background-image: url("/assets/hold.png"); }
-button.resume-button  { border: none; height: 20px; width: 28px; background-image: url("/assets/resume.png"); }
-button.start-button   { border: none; height: 20px; width: 28px; background-image: url("/assets/start.png"); }
-button.stop-button    { border: none; height: 20px; width: 28px; background-image: url("/assets/stop.png"); }
-button.restart-button { border: none; height: 20px; width: 28px; background-image: url("/assets/restart.png"); }
+button.inspect-button { border: none; height: 20px; width: 16px; background-image: url("/assets/inspect.png"); background-size: cover; background-position: center; background-repeat: no-repeat; }
+button.hold-button    { border: none; height: 1em; width: 1em; background-image: url("/assets/hold.png")   ; background-size: cover; background-position: center; background-repeat: no-repeat; }
+button.resume-button  { border: none; height: 1em; width: 1em; background-image: url("/assets/resume.png") ; background-size: cover; background-position: center; background-repeat: no-repeat; }
+button.start-button   { border: none; height: 1em; width: 1em; background-image: url("/assets/start.png")  ; background-size: cover; background-position: center; background-repeat: no-repeat; }
+button.stop-button    { border: none; height: 1em; width: 1em; background-image: url("/assets/stop.png")   ; background-size: cover; background-position: center; background-repeat: no-repeat; }
+button.restart-button { border: none; height: 1em; width: 1em; background-image: url("/assets/restart.png"); background-size: cover; background-position: center; background-repeat: no-repeat; }
 
 th.controls {
   padding-left: 0px;
