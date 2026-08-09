@@ -58,6 +58,7 @@ func RegisterJob(job *Job, updates chan *JobUpdate, depEvt chan *depEvt, stop <-
 		for {
 			select {
 			case <-job.Logging.l.C:
+				job.Lock()
 				e := job.Logging.Logs[0] // log(s) to be removed
 				job.Logging.Logs = job.Logging.Logs[1:]
 				lfiles := e.LogFiles
@@ -75,6 +76,7 @@ func RegisterJob(job *Job, updates chan *JobUpdate, depEvt chan *depEvt, stop <-
 					//job.Logging.l.Reset(n.Value.(JobLog).prevStop.Add(time.Duration(time.Second * 70)).Sub(time.Now()))
 				}
 				job.SaveSnapshot(true)
+				job.Unlock()
 			}
 		}
 	}(job)
@@ -453,12 +455,13 @@ func runTik(job *Job, pid chan int, retry bool) {
 		job.StartedUNIX = job.prevStart.Unix()
 		job.Started = job.prevStart.In(job._location).Format("2006-01-02 15:04:05")
 
-		job.lock.Unlock()
+		job.Unlock()
 		job.setJobState(JRunning)
 		job.sendUpdate()
 
 		err = c.Wait() // blocks until job ends, possibly also sending <-job.Ctl if external trigger
 
+		job.Lock()
 		errcode = 0
 		if err != nil {
 			if exitErr, ok := err.(*exec.ExitError); ok {
@@ -469,7 +472,6 @@ func runTik(job *Job, pid chan int, retry bool) {
 				}
 			}
 		}
-		job.Lock()
 		job.IsRunning = false
 		job.prevStop = time.Now()
 		job.PrevStop = job.prevStop.In(job._location).Format("2006-01-02 15:04:05")
@@ -485,7 +487,7 @@ func runTik(job *Job, pid chan int, retry bool) {
 
 		job.Pid = 0
 		job.pid = job.Pid
-		job.lock.Unlock()
+		job.Unlock()
 
 	} else {
 		// job.Jobs is defined? if so build new rpeat or start first job
@@ -545,14 +547,17 @@ func runTik(job *Job, pid chan int, retry bool) {
 			job.status <- -1
 		}
 	}
+	job.Lock()
 	job.ExitCode = errcode
 	//job.sendUpdate()
 	//job.resetContingency()
 	job.Unscheduled = false
+	job.Unlock()
 
 	//fmt.Println("SysUsage", c.ProcessState.SysUsage())
 }
 func shutdownJob(job *Job, jstate JState) {
+	job.Lock()
 	ServerLogger.Printf("[shutdownJob] triggered for %s (%s => %s)", job.JobUUID, job.JobState, jstate)
 
 	pid := job.pid
@@ -575,6 +580,7 @@ func shutdownJob(job *Job, jstate JState) {
 	job.Ctl <- &ctl
 	ServerLogger.Printf("[shutdownJob] %s %s Ctl sent!", job.JobUUID, jstate)
 	ServerLogger.Printf("[shutdownJob] completed for %s", job.JobUUID)
+	job.Unlock()
 
 	if jstate == JStopped {
 		job.setHold(true)
@@ -717,7 +723,7 @@ func endAtTime(t *time.Timer, job *Job, ctl chan *Ctl, caller string, e chan boo
 	}
 	job.pid = 0
 	job.Pid = job.pid
-	job.lock.Unlock()
+	job.Unlock()
 	job.setRetryAttempt(0)
 	//log.Printf("[endAtTime] %s completed for %s:%s:%s !", caller, job.JobUUID, job.RunUUID, job.Name)
 	return true

@@ -13,7 +13,6 @@ type Endpoint struct {
 
 // Alert actions conditioned on rpeat job state. Zero or more may be
 // specified depending on user requirements.
-//
 type AlertActions struct {
 	// Alert based on associated state change
 	OnSuccess     *Alert `json:"OnSuccess,omitempty" xml:"OnSuccess,omitempty"`
@@ -150,6 +149,10 @@ func (job *Job) GetAlertParams() AlertParams {
 	return job.getAlertParams()
 }
 func (job *Job) getAlertParams() AlertParams {
+
+	job.RLock()
+	defer job.RUnlock()
+
 	maxLogLines := 20
 	if job.AlertActions.MaxLogLines != nil {
 		maxLogLines = *job.AlertActions.MaxLogLines

@@ -558,6 +558,7 @@ type Job struct {
 	StderrFile    []string
 
 	// private members
+	rwmu           sync.RWMutex     `json:"-"`
 	lock           sync.Mutex       `json:"-"`
 	runlock        sync.Mutex       `json:"-"`
 	status         chan int         `json:"-"`
@@ -863,12 +864,23 @@ func (jobm *jobMap) Unserialize(buf *bytes.Buffer) {
 	}
 }
 
+// job locking
+func (job *Job) RLock() {
+	job.rwmu.RLock()
+}
+func (job *Job) RUnlock() {
+	job.rwmu.RUnlock()
+}
+func (job *Job) TryLock() bool {
+	return job.rwmu.TryLock()
+}
 func (job *Job) Lock() {
-	job.lock.Lock()
+	job.rwmu.Lock()
 }
 func (job *Job) Unlock() {
-	job.lock.Unlock()
+	job.rwmu.Unlock()
 }
+
 func (job *JobSpec) isTemplate() bool {
 	if job.Type == nil {
 		return false
@@ -968,6 +980,8 @@ type JobStatusParams struct {
 func (job *Job) availableControls() []string {
 	//job.lock.Lock()
 	//defer job.lock.Unlock()
+	job.RLock()
+	defer job.RUnlock()
 
 	controls := []string{"info"}
 
@@ -1038,6 +1052,7 @@ func (job *Job) updateParams() *JobUpdateParams {
 	return &params
 }
 func (job *Job) statusParams() *JobStatusParams {
+
 	params := JobStatusParams{
 		Name:           job.Name,
 		JobUUID:        job.JobUUID,
@@ -1056,6 +1071,10 @@ func (job *Job) statusParams() *JobStatusParams {
 	return &params
 }
 func (job *Job) sendUpdateClient() {
+
+	job.RLock()
+	defer job.RUnlock()
+
 	tzname, tzoffset := time.Now().Zone()
 	// websocket clients
 	job.updates <- &JobUpdate{Uuid: job.JobUUID.String(), Modified: job.modified, Job: *job.updateParams(), Tzoffset: tzoffset, Tzname: tzname}
@@ -1064,6 +1083,8 @@ func (job *Job) sendUpdate() {
 
 	//_, filename, line, _ := runtime.Caller(1)
 	//ServerLogger.Printf("[sendUpdate] %s:%d", filename, line)
+	job.RLock()
+	defer job.RUnlock()
 
 	tzname, tzoffset := time.Now().Zone()
 	// websocket clients
@@ -1239,6 +1260,7 @@ func (job *Job) setJobState(s JState) error {
 	return nil
 }
 func (job *Job) WaitForTrigger(stop <-chan bool) error {
+
 	ServerLogger.Printf(InfoColor, fmt.Sprintf("Waiting for Trigger %s:%s (%s)", job.JobUUID, job.Name, job.JobState))
 	ticker := time.NewTicker(time.Second * 15)
 	defer ticker.Stop()
@@ -1279,10 +1301,17 @@ func (job *Job) resetTimer(d time.Duration) {
 	job.modified = time.Now().Unix()
 }
 func (job *Job) getHold() bool {
+
+	job.RLock()
+	defer job.RUnlock()
+
 	hold := job.Hold
 	return hold
 }
 func (job *Job) setHold(h bool) {
+	job.Lock()
+	defer job.Unlock()
+
 	job.Hold = h
 	job.modified = time.Now().Unix()
 }

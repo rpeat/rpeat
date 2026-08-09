@@ -364,6 +364,9 @@ func Shutdown(jobs jobMap) {
 				time.Sleep(time.Second)
 			} else {
 				ServerLogger.Printf("Holding %s:%s", job.JobUUID, job.Name)
+				if !job.TryLock() {
+					job.Unlock()
+				}
 				job.setHold(true)
 			}
 		}(job)
