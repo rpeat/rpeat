@@ -19,11 +19,11 @@ func (m MapStringString) MarshalXML(e *xml.Encoder, start xml.StartElement) erro
 	tokens := []xml.Token{start}
 
 	for key, value := range m {
-		t := xml.StartElement{Name: xml.Name{"", key}}
-		tokens = append(tokens, t, xml.CharData(value), xml.EndElement{t.Name})
+		t := xml.StartElement{Name: xml.Name{Space: "", Local: key}}
+		tokens = append(tokens, t, xml.CharData(value), xml.EndElement{Name: t.Name})
 	}
 
-	tokens = append(tokens, xml.EndElement{start.Name})
+	tokens = append(tokens, xml.EndElement{Name: start.Name})
 
 	for _, t := range tokens {
 		err := e.EncodeToken(t)
@@ -61,9 +61,9 @@ func (env Env) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	tokens := []xml.Token{start}
 
 	for key, value := range env {
-		t := xml.StartElement{Name: xml.Name{"", "Env"}}
+		t := xml.StartElement{Name: xml.Name{Space: "", Local: "Env"}}
 		keyValue := fmt.Sprintf("%s=%s", key, value)
-		tokens = append(tokens, t, xml.CharData(keyValue), xml.EndElement{t.Name})
+		tokens = append(tokens, t, xml.CharData(keyValue), xml.EndElement{Name: t.Name})
 	}
 
 	/* using <Env name="KEY">VALUE</Env> style
@@ -73,7 +73,7 @@ func (env Env) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	       tokens = append(tokens, t, xml.CharData(value), xml.EndElement{t.Name})
 	   }
 	*/
-	tokens = append(tokens, xml.EndElement{start.Name})
+	tokens = append(tokens, xml.EndElement{Name: start.Name})
 
 	for _, t := range tokens {
 		err := e.EncodeToken(t)
@@ -136,19 +136,19 @@ func (s JobTrigger) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	*/
 
 	for key, value := range s {
-		jobtrigger := xml.StartElement{Name: xml.Name{"", "JobTrigger"}}
-		jobuuidelem := xml.StartElement{Name: xml.Name{"", "NameOrUUID"}}
+		jobtrigger := xml.StartElement{Name: xml.Name{Space: "", Local: "JobTrigger"}}
+		jobuuidelem := xml.StartElement{Name: xml.Name{Space: "", Local: "NameOrUUID"}}
 		jobuuid := xml.CharData(key)
-		triggerelem := xml.StartElement{Name: xml.Name{"", "Trigger"}}
+		triggerelem := xml.StartElement{Name: xml.Name{Space: "", Local: "Trigger"}}
 		trigger := xml.CharData(value)
 		tokens = append(tokens,
 			jobtrigger,
-			jobuuidelem, jobuuid, xml.EndElement{jobuuidelem.Name},
-			triggerelem, trigger, xml.EndElement{triggerelem.Name},
-			xml.EndElement{jobtrigger.Name})
+			jobuuidelem, jobuuid, xml.EndElement{Name: jobuuidelem.Name},
+			triggerelem, trigger, xml.EndElement{Name: triggerelem.Name},
+			xml.EndElement{Name: jobtrigger.Name})
 	}
 
-	tokens = append(tokens, xml.EndElement{start.Name})
+	tokens = append(tokens, xml.EndElement{Name: start.Name})
 
 	for _, t := range tokens {
 		err := e.EncodeToken(t)
@@ -192,16 +192,16 @@ func (p Permission) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 		if len(value) == 0 {
 			continue
 		}
-		t := xml.StartElement{Name: xml.Name{"", key}}
+		t := xml.StartElement{Name: xml.Name{Space: "", Local: key}}
 		tokens = append(tokens, t)
 		for _, u := range value {
-			user := xml.StartElement{Name: xml.Name{"", "User"}}
-			tokens = append(tokens, user, xml.CharData(u), xml.EndElement{user.Name})
+			user := xml.StartElement{Name: xml.Name{Space: "", Local: "User"}}
+			tokens = append(tokens, user, xml.CharData(u), xml.EndElement{Name: user.Name})
 		}
-		tokens = append(tokens, xml.EndElement{t.Name})
+		tokens = append(tokens, xml.EndElement{Name: t.Name})
 	}
 
-	tokens = append(tokens, xml.EndElement{start.Name})
+	tokens = append(tokens, xml.EndElement{Name: start.Name})
 
 	for _, t := range tokens {
 		err := e.EncodeToken(t)

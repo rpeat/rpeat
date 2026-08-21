@@ -47,7 +47,7 @@ type AlertActions struct {
 	// Disable rpeat.io Alerts dashboard
 	NoRpeatio *bool `json:"NoRpeatio,omitempty" xml:"NoRpeatio,omitempty"`
 
-	MaxLogLines *int `json:"MaxLogLines,omitempty" xml"MaxLogLines,omitempty"`
+	MaxLogLines *int `json:"MaxLogLines,omitempty" xml:"MaxLogLines,omitempty"`
 }
 
 func (job *Job) HasAlerts() bool {
