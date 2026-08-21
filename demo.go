@@ -15,27 +15,27 @@ import (
 func CreateDemo() {
 
 	fmt.Println()
-	kconf := createServerConfig()
+	sconf := createServerConfig()
 	fmt.Println()
 
-	kjson, _ := json.MarshalIndent(kconf, "", "  ")
-	configFile := kconf.Abs(kconf.ConfigFile)
+	sjson, _ := json.MarshalIndent(sconf, "", "  ")
+	configFile := sconf.Abs(sconf.ConfigFile)
 	fmt.Printf("  ServerConfig json: %s\n", configFile)
 	if exists, _ := FileExists(configFile); !exists {
-		WriteJSON(kjson, configFile)
+		WriteJSON(sjson, configFile)
 	}
 
-	jobs := createJobs(kconf.Owner)
+	jobs := createJobs(sconf.Owner)
 	j, _ := json.MarshalIndent(jobs, "", "  ")
-	jobsFiles := kconf.Abs(kconf.JobsFiles[0])
+	jobsFiles := sconf.Abs(sconf.JobsFiles[0])
 	fmt.Printf("  JobSpec json: %s\n", jobsFiles)
 	if exists, _ := FileExists(jobsFiles); !exists {
 		WriteJSON(j, jobsFiles)
 	}
 
-	auth := createAuth(kconf.Owner)
+	auth := createAuth(sconf.Owner)
 	a, _ := json.MarshalIndent(auth, "", "  ")
-	authFile := kconf.Abs(kconf.AuthFile)
+	authFile := sconf.Abs(sconf.AuthFile)
 	fmt.Printf("  Auth json: %s\n", authFile)
 	if exists, _ := FileExists(authFile); !exists {
 		WriteJSON(a, authFile)
@@ -50,7 +50,7 @@ reset the demo, either delete its directory or rename it.
 Enjoy!
 
 `
-	fmt.Printf(directoryDetails)
+	fmt.Printf("%s", directoryDetails)
 
 }
 
@@ -80,21 +80,6 @@ func createDir(dir string) {
 func createJobs(user string) []JobSpec {
 
 	jobs := make([]JobSpec, 3)
-	/*
-	   "Cmd": "/bin/sh -c echo \"hello $WORLD!\" && sleep $SLEEP",
-	   "Env": [
-	       "SLEEP=10",
-	       "WORLD=not the whole world"
-	   ],
-	   "ExitState": null,
-	   "AlertActions": {
-	       "OnSuccess": {
-	           "To": [
-	               "jeff.a.ryan@gmail.com"
-	           ]
-	       }
-	   },
-	*/
 
 	jobs[0].Name = "Hello World!"
 	CronStart := []string{"* * * * *"}
@@ -108,8 +93,8 @@ func createJobs(user string) []JobSpec {
 	alerts := AlertActions{}
 	success := Alert{}
 	failure := Alert{}
-	to := "no-reply@quantkiosk.com"
-	bcc := "shhh@quantkiosk.com"
+	to := "no-reply@example.com"
+	bcc := "shhh@example.com"
 	success.To = []*string{&to}
 	alerts.OnSuccess = &success
 	failure.To = []*string{&to}
@@ -181,10 +166,7 @@ func createServerConfig() ServerConfig {
 	conf.ConfigFile = "demo/config.json"
 	conf.AuthFile = "demo/auth.json"
 	conf.Https = false
-	//conf.Timezone, _ = time.Now().Zone()
-	//if time.Local.String() != "Local" {
 	conf.Timezone = time.Local.String()
-	//}
 	conf.Owner = u.Username
 	conf.Name = "DEMO" //conf.Owner
 	conf.Admin = []string{conf.Owner}

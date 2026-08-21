@@ -97,7 +97,7 @@ func (client *wSClient) watch() {
 				ConnectionLogger.Printf("write error (%s): %s", client.conn.RemoteAddr(), err.Error())
 				return
 			} else if u != nil {
-				ConnectionLogger.Printf("UPDATE Uuid:%s Modified:%d to %s", u.Uuid, u.Modified, client.conn.RemoteAddr())
+				ConnectionLogger.Printf("sending UPDATE Uuid:%s Modified:%d to %s", u.Uuid, u.Modified, client.conn.RemoteAddr())
 			}
 		case <-t.C:
 			type ServerTime struct {

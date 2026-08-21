@@ -14,20 +14,22 @@ var UTC = "UTC"
 // d takes the form  [MM|DD|YY|CC|hh|mm|ss]+[,[+-]?[0-9]+[Y|Q|M|W|D]][,CALENDAR]
 //
 // e.g.
-//   CCYY-MM           converts to 2020-03 when called between 2020-03-01 and 2020-03-31
-//   CCYY-MM,+1M       converts to 2020-04 when called between 2020-03-01 and 2020-03-31
-//   CCYYMM,+1D        converts to 202004 when called on and 2020-03-31
-//   CCYY/MM,-5D       converts to 2020/03 when called on and 2020-04-01
-//   CCYY-MM-DD,-1D    converts to 2020-03-29 when called on and 2020-03-30
-//   CCYY-MM-DD,-1D,MF converts to 2020-03-27 when called on and 2020-03-30 (using MF only)
-//   CCYY-MM-DD,+5D,MF converts to 2020-04-06 when called on and 2020-03-30 (using MF only)
+//
+//	CCYY-MM           converts to 2020-03 when called between 2020-03-01 and 2020-03-31
+//	CCYY-MM,+1M       converts to 2020-04 when called between 2020-03-01 and 2020-03-31
+//	CCYYMM,+1D        converts to 202004 when called on and 2020-03-31
+//	CCYY/MM,-5D       converts to 2020/03 when called on and 2020-04-01
+//	CCYY-MM-DD,-1D    converts to 2020-03-29 when called on and 2020-03-30
+//	CCYY-MM-DD,-1D,MF converts to 2020-03-27 when called on and 2020-03-30 (using MF only)
+//	CCYY-MM-DD,+5D,MF converts to 2020-04-06 when called on and 2020-03-30 (using MF only)
 //
 // As this is only converting the date component, hh, mm, or ss are simply converted to
 // 00. Any value not matching one of these magic variables remains in final string
 //
 // e.g.
-//   CCYYMM22          converts to 20200322 when called between 2020-03-01 and 2020-03-01
-//   CCYYMM22,+2D      converts to 20200322 when called on 2020-03-22 (Feature!)
+//
+//	CCYYMM22          converts to 20200322 when called between 2020-03-01 and 2020-03-01
+//	CCYYMM22,+2D      converts to 20200322 when called on 2020-03-22 (Feature!)
 func ConvertDate(d string, timezone string, calendarPath []string, asof string) (datestring string, err error) {
 
 	dt := strings.Split(d, ",")

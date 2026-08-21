@@ -190,26 +190,26 @@ func (job *Job) HasPermission(user, action string) bool {
 	return job.hasPermission(user, action)
 }
 
-//func (job *Job) HasPermission(user, action string) bool {
-//    if job.User == user {
-//        // job.User has full access always
-//        return true
-//    }
-//    if stringInSlice(user, job.Admin) {
-//        var authorized, any []string
+//	func (job *Job) HasPermission(user, action string) bool {
+//	   if job.User == user {
+//	       // job.User has full access always
+//	       return true
+//	   }
+//	   if stringInSlice(user, job.Admin) {
+//	       var authorized, any []string
 //
-//        authorized, _ = job.Permissions[action]
-//        any, _ = job.Permissions["all"]
+//	       authorized, _ = job.Permissions[action]
+//	       any, _ = job.Permissions["all"]
 //
-//        authorized = append(authorized, any...)
-//        for _, a := range authorized {
-//            if a == user || a == "*" {
-//                return true
-//            }
-//        }
-//    }
-//    return false
-//}
+//	       authorized = append(authorized, any...)
+//	       for _, a := range authorized {
+//	           if a == user || a == "*" {
+//	               return true
+//	           }
+//	       }
+//	   }
+//	   return false
+//	}
 func (s ServerConfig) hasPermission(user, action string) bool {
 	if s.Owner == user {
 		return true

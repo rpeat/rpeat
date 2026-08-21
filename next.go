@@ -262,7 +262,7 @@ FindTime:
 	return yymmddhhmmss
 }
 
-//func nextYearDates(t time.Time, mday, mon, wday []int) (dates []int){
+// func nextYearDates(t time.Time, mday, mon, wday []int) (dates []int){
 func nextYearDates(y0, m0 int, mday, mon, wday []int) (dates []int) {
 	//y0,m0,_ := t.Date()
 	// current date through end of year

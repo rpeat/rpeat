@@ -101,7 +101,7 @@ func NextAvailableDate(t time.Time, calendar string, calendarPath []string) (int
 	return y, m, d
 }
 
-//FIXME: these cal vs path are inconsistent
+// FIXME: these cal vs path are inconsistent
 func addDateWithCal(t time.Time, years int, months int, days int, cal Cal) time.Time {
 	y, m, d := t.Date()
 	date := y*10000 + int(m)*100 + d
