@@ -73,6 +73,8 @@ func (e ValidationError) Error() string {
 		s = fmt.Sprintf("%s: Env variables requested but not defined: %s", e.Exception, e.Msg)
 	case CmdVar:
 		s = fmt.Sprintf("%s: Env or DateEnv variables used in Cmd but not defined: %s", e.Exception, e.Msg)
+	case Cmd:
+		s = fmt.Sprintf("%s: %s", e.Exception, e.Msg)
 	case DateEnvVar:
 		s = fmt.Sprintf("%s: DateEnv requested but not defined: %s", e.Exception, e.Msg)
 	case Exec:
@@ -154,12 +156,13 @@ func (e *JobValidationExceptions) Validated() bool {
 }
 
 /*
-   Specific Validators
+Specific Validators
 */
 type CmdException int
 
 const (
 	CmdMissing CmdException = iota
+	ExecutableNotFound
 )
 
 type CmdError struct {
@@ -168,7 +171,7 @@ type CmdError struct {
 }
 
 func (e CmdException) String() string {
-	names := [...]string{"CmdMissing"}
+	names := [...]string{"CmdMissing", "ExecutableNotFound"}
 	return names[e]
 }
 func (e CmdError) Error() string {
@@ -176,6 +179,8 @@ func (e CmdError) Error() string {
 	switch e.Exception {
 	case CmdMissing:
 		s = fmt.Sprintf("%s: 'Cmd' is missing or template inherited from is not available", e.Exception)
+	case ExecutableNotFound:
+		s = fmt.Sprintf("%s: Executable not found", e.Exception)
 	default:
 		s = e.Exception.String()
 	}
@@ -184,8 +189,15 @@ func (e CmdError) Error() string {
 func (job *Job) ValidateCmd() {
 	if job.Cmd == nil {
 		ce := CmdError{Exception: CmdMissing, Cmd: ""}
-		job.jve.AddWarning(ValidationWarning{Exception: Cmd, Msg: ce.Error(), JobName: job.Name})
+		job.jve.AddError(ValidationError{Exception: Cmd, Msg: ce.Error(), JobName: job.Name})
+	} else {
+		evo, _ := expandAllVars(job, []string{}, job.Cmd, false, "")
+		if evo.execErr != nil {
+			//ce := CmdError{Exception: ExecutableNotFound, Cmd: evo.execErr.Error() }
+			job.jve.AddError(ValidationError{Exception: Cmd, Msg: evo.execErr.Error(), JobName: job.Name})
+		}
 	}
+	return
 }
 
 // EXCEPTION: Env and DateEnv
@@ -273,11 +285,11 @@ func (e CalendarError) Error() string {
 	case MissingCalendar:
 		s = fmt.Sprintf("%s: has no defined calendar. Use \"ALL\" to specify all days are OK and remove this message", e.Exception)
 	case MissingCalendarDirs:
-		s = fmt.Sprintf("%s: \"%s\" set, but no calendar directories provided\n", e.Exception, e.Calendar)
+		s = fmt.Sprintf("%s: \"%s\" set, but no calendar directories provided", e.Exception, e.Calendar)
 	//case CalendarNotFound: // FIXME these should just be a general format call for any file issue
-	//    s = fmt.Sprintf("%s: \"%s\" not found in %s (%s)\n",e.Exception,e.Calendar,Stringify(e.CalendarDirs),e.fileErr)
+	//    s = fmt.Sprintf("%s: \"%s\" not found in %s (%s)",e.Exception,e.Calendar,Stringify(e.CalendarDirs),e.fileErr)
 	case CalendarNotFound, CalendarDirNotFound:
-		s = fmt.Sprintf("%s: %s\n", e.Exception, e.fileErr)
+		s = fmt.Sprintf("%s: %s", e.Exception, e.fileErr)
 	default:
 		s = e.Exception.String()
 	}
@@ -414,7 +426,7 @@ func (job *Job) ValidatePermissions() PermissionError {
 	//admin := job.Admin   TODO
 	if user == "" {
 		// NoUserSet
-		pe := PermissionError{Exception: NoUserSet}
+		pe := PermissionError{Exception: NoUserSet, isWarning: true}
 		job.jve.AddError(ValidationError{Exception: Permissions, Msg: pe.Error(), JobName: job.Name})
 	} else {
 		// UnknownUser
@@ -423,12 +435,12 @@ func (job *Job) ValidatePermissions() PermissionError {
 	if len(perms) == 0 {
 		// NoPermissionsGranted
 		pe := PermissionError{Exception: NoPermissionsGranted, User: user}
-		job.jve.AddError(ValidationError{Exception: Permissions, Msg: pe.Error(), JobName: job.Name})
+		job.jve.AddWarning(ValidationWarning{Exception: Permissions, Msg: pe.Error(), JobName: job.Name})
 	} else {
 		// TODO: no returned actions being set yet
 		for action, users := range perms {
 			// UnknownAction
-			//fmt.Printf("check action %s is valid (TODO)\n", action)
+			//fmt.Printf("check action %s is valid (TODO)", action)
 			if stringInSlice("*", users) {
 				// NoRestrictions (Warning)
 				pe := PermissionError{Exception: NoRestrictions, Action: action}
@@ -614,7 +626,6 @@ func ValidateConfig(configFile string) ConfigValidationExceptions {
 	return cve
 }
 
-//
 // Configuration exceptions are special errors (ValidationError) and
 // warnings (ValidationWarning) captured during the configuration
 // validation step accessible via rpeat-util tool.
@@ -643,7 +654,7 @@ func ValidateConfig(configFile string) ConfigValidationExceptions {
 // or in the environment. Note that this may differ if environment used to
 // validate is not the environment when rpeat-server is run.
 //
-// DateEnvVar TBA
+// # DateEnvVar TBA
 //
 // Schedule exceptions indicate issues with the cron syntax
 // IncorrectNumberOfFields: cron spec must be either 5 (minutes) or 6 fields,
@@ -651,7 +662,7 @@ func ValidateConfig(configFile string) ConfigValidationExceptions {
 // MalformedEvery: @every requires a duration string - e.g. 1m or 1h,
 // UnrecognizedAt: indicates a shorthand @ is not defined as stated
 //
-// Calendar exceptions
+// # Calendar exceptions
 //
 // o  MissingCalendar
 // o  MissingCalendarDirs
@@ -660,12 +671,11 @@ func ValidateConfig(configFile string) ConfigValidationExceptions {
 // o  CalendarDirNotFound
 // o  CalendarReadError  // permission | format
 //
-// Timezone exceptions
+// # Timezone exceptions
 //
 // o  MissingTimezone
 // o  InvalidTimezone
 // o  AbbreviatedTimezone
-//
 type JobValidationExceptionsMap map[uuid.UUID]JobValidationExceptions
 
 func ValidateJobs(files []string, configFile, authFile string, verbose bool) (JobValidationExceptions, JobValidationExceptionsMap) {
@@ -717,7 +727,7 @@ func ValidateJobs(files []string, configFile, authFile string, verbose bool) (Jo
 							fmt.Printf(WarningColor, fmt.Sprintf("  %s\n", msg))
 						}
 					} else {
-						job_templates[job.Name] = job
+						job_templates[job.Name] = job.copyJob()
 						err := jobtmpl.parseJob(false)
 						if err != nil {
 							if verbose {
@@ -741,11 +751,11 @@ func ValidateJobs(files []string, configFile, authFile string, verbose bool) (Jo
 					}
 
 					if _, ok := seenJobNames[jobs[ji].Name]; ok {
-						msg := fmt.Sprintf("Duplicate job name '%#s' found", jobs[ji].Name)
+						msg := fmt.Sprintf("Duplicate job name '%s' found", jobs[ji].Name)
 						jobs[ji].jve.AddError(ValidationError{Msg: msg, Exception: DuplicateJob})
 					}
 					if _, ok := seenJobUUIDs[jobs[ji].JobUUID.String()]; ok {
-						msg := fmt.Sprintf("Duplicate job UUID '%#s' found", jobs[ji].JobUUID.String())
+						msg := fmt.Sprintf("Duplicate job UUID '%s' found", jobs[ji].JobUUID.String())
 						jobs[ji].jve.AddError(ValidationError{Msg: msg, Exception: DuplicateJob})
 					}
 					seenJobNames[jobs[ji].Name] = true
@@ -803,7 +813,7 @@ func ValidateJobs(files []string, configFile, authFile string, verbose bool) (Jo
 
 	if verbose {
 		fmt.Println()
-		fmt.Println("Jobs:\n")
+		fmt.Printf("Jobs:\n\n")
 	}
 	ji := 0
 	for i, _ := range alljobs {
@@ -831,7 +841,7 @@ func ValidateJobs(files []string, configFile, authFile string, verbose bool) (Jo
 			if verbose {
 				ji++
 				fmt.Println("  ---------------------------------------------------------------------------------------------------")
-				fmt.Printf("  [%d of %d] \033[1m%s\033[0m [%s] (%#s)\n", ji, totaljobs-totaltemplates-totaldisabled, alljobs[i].Name, alljobs[i].JobUUID, alljobs[i].src)
+				fmt.Printf("  [%d of %d] \033[1m%s\033[0m [%s] (%s)\n", ji, totaljobs-totaltemplates-totaldisabled, alljobs[i].Name, alljobs[i].JobUUID, alljobs[i].src)
 				//inherits := "N/A"
 				inheritanceChain := ""
 				group := "N/A"
@@ -872,6 +882,9 @@ func ValidateJobs(files []string, configFile, authFile string, verbose bool) (Jo
 							nextStart = "TBD (Dependency Triggered)"
 						}
 						fmt.Printf("    \033[1;38;5;12mStart:\033[0m\t%s [ CronStart:  %s ]\n", nextStart, Stringify(alljobs[i].CronStartArray))
+						if alljobs[i].Jitter != 0 {
+							fmt.Printf("    \033[1;38;5;12mJitter:\033[0m\t%d\n", alljobs[i].Jitter)
+						}
 					}
 				}
 			}
@@ -941,7 +954,7 @@ func ValidateJobs(files []string, configFile, authFile string, verbose bool) (Jo
 	}
 
 	if verbose {
-		fmt.Println("Templates:\n")
+		fmt.Printf("Templates:\n\n")
 	}
 	t := 0
 	if totaltemplates == 0 {
@@ -954,7 +967,7 @@ func ValidateJobs(files []string, configFile, authFile string, verbose bool) (Jo
 				evaluatedCmd(alljobs[i], false, "")
 				if verbose {
 					fmt.Println("  ---------------------------------------------------------------------------------------------------")
-					fmt.Printf("  [%d of %d] Template:%s [%s] (%#s)\n", t+1, totaltemplates, alljobs[i].Name, alljobs[i].JobUUID, alljobs[i].src)
+					fmt.Printf("  [%d of %d] Template:%s [%s] (%s)\n", t+1, totaltemplates, alljobs[i].Name, alljobs[i].JobUUID, alljobs[i].src)
 					if len(alljobs[i].jve.Errors) > 0 {
 						fmt.Printf(ErrorColor, "\n    Errors:\n")
 						for _, e := range alljobs[i].jve.Errors {
