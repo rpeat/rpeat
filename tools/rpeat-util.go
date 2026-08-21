@@ -33,6 +33,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/user"
+	"path/filepath"
 	"rpeat"
 	"strings"
 	"time"
@@ -40,6 +42,9 @@ import (
 
 func main() {
 	rpeat.Init()
+
+	usr, _ := user.Current()
+	userHomeDir := usr.HomeDir
 
 	help := fmt.Sprintf(`
 rpeat-util  (%s)
@@ -76,12 +81,22 @@ Usage:
          # today minus two months, using MF only
          rpeat-util date -datevar CCYYMMDD,+2M,MF -calendarDirs=caldir
 
-    convert: convert job file(s) between xml and json format
+    convert: convert job file between xml and json format
+
+        -f format all [xml |json]
 
     validate: comprehensive validation check on list of job file(s)
 
       Validate checks expression, environment variables, dependencies, timezone
       calendars, permissions and templates for any syntax issues or missingness
+ 
+        -s short format
+
+      Restrict checks to 
+        -j job uuid or pattern
+        -p pattern
+        -t tags
+        -g group
       
       return value 0: ok, 1: warning, 2: error
 
@@ -105,7 +120,7 @@ Usage:
 `, rpeat.BUILDDATE)
 	// next
 	var cron, cronfile, tz, cal, calendarDirs, asof, timefmt, sep string
-	var reqcal, rollback, header, endof, verbose, asjson bool
+	var reqcal, rollback, header, endof, verbose, asjson, asxml bool
 	var jitter int
 	var N int
 	nextCmd := flag.NewFlagSet("next", flag.ExitOnError)
@@ -134,6 +149,8 @@ Usage:
 
 	// convert json <-> xml
 	convertCmd := flag.NewFlagSet("convert", flag.ExitOnError)
+	convertCmd.BoolVar(&asjson, "json", false, "convert to json")
+	convertCmd.BoolVar(&asxml, "xml", false, "convert to xml")
 
 	// jobstate
 	var rj string
@@ -149,6 +166,12 @@ Usage:
 	dateCmd.StringVar(&timezone, "tz", "", "a valid IANA timezone. e.g. America/Chicago")
 	dateCmd.StringVar(&caldirs, "calendarDirs", "", "comma sep string of one or more calendar directories")
 	dateCmd.StringVar(&asof, "asof", "", "asof time to calculate next start time formatted as YYYYMMDDmmddss (current time)")
+
+	// gen-tls-cert
+	var dir, host string
+	certCmd := flag.NewFlagSet("cert", flag.ExitOnError)
+	certCmd.StringVar(&dir, "dir", filepath.Join(userHomeDir, ".rpeat"), "install `directory`")
+	certCmd.StringVar(&host, "host", "", "domain name or ip `address`")
 
 	if len(os.Args) == 1 || os.Args[1] == "-h" || os.Args[1] == "help" {
 		fmt.Println(help)
@@ -277,16 +300,21 @@ Usage:
 			os.Exit(2)
 		}
 	case "convert":
-		convertCmd.Parse(os.Args[2:])
-		if convertCmd.NArg() == 0 {
+		convertCmd.Usage = func() {
+			fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [options] <job-file> [... <job-file>]\n", os.Args[0])
+			fmt.Fprintln(flag.CommandLine.Output(), "\nOptions:\n")
 			convertCmd.PrintDefaults()
+			fmt.Fprintln(flag.CommandLine.Output(), "\nPositional arguments:\n")
+			fmt.Fprintln(flag.CommandLine.Output(), "  <job-file> job files to convert \n")
+		}
+		convertCmd.Parse(os.Args[2:])
+		if convertCmd.NArg() == 0 || os.Args[1] == "-h" {
+			convertCmd.Usage()
 			os.Exit(2)
 		}
 		jobs := convertCmd.Args()
-		fmt.Println("converting ", os.Args)
 		for _, jobfile := range jobs {
-			fmt.Println("converting ", jobfile)
-			rpeat.ConvertJobsFile(jobfile)
+			rpeat.ConvertJobsFile(jobfile, asjson, asxml)
 		}
 	case "jobstate":
 		jobstateCmd.Parse(os.Args[2:])
@@ -317,6 +345,17 @@ Usage:
 			os.Exit(1)
 		}
 		fmt.Printf("%s => %s\n", datevar, dt)
+	case "cert":
+		certCmd.Parse(os.Args[2:])
+		if certCmd.NFlag() == 0 {
+			certCmd.PrintDefaults()
+			os.Exit(2)
+		}
+		pemfiles, err := rpeat.CreateX509(host, dir, false)
+		if err != nil {
+			os.Exit(2)
+		}
+		fmt.Printf("\nSelf signed 'rpeat®' X.509 certificate and key created:\n  %s\n  %s\n\n", pemfiles.Cert, pemfiles.Key)
 	default:
 		flag.PrintDefaults()
 	}

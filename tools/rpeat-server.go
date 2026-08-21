@@ -50,13 +50,6 @@ time, but myriad options such as permissioning, logging, alerts, retry, and more
 
 All tasks (a.k.a. jobs) are defined in one or more json/xml files, either passed as -jobs or files listed in JobsFiles field of
 the configuration json file (which itself is specified via -config)
-
---config
-
---jobs
-
---auth
-
 `)
 		fmt.Printf("\n\n")
 		fmt.Printf("Usage: rpeat-server start [options]>\n\n")
@@ -98,12 +91,6 @@ the configuration json file (which itself is specified via -config)
 	reloadCmd := flag.NewFlagSet("reload", flag.ExitOnError)
 	reloadCmd.StringVar(&home, "home", filepath.Join(userHomeDir, ".rpeat"), "home of running server process")
 	reloadCmd.StringVar(&port, "port", "", "port of running server process")
-
-	// gen-tls-cert
-	var dir, host string
-	certCmd := flag.NewFlagSet("cert", flag.ExitOnError)
-	certCmd.StringVar(&dir, "dir", filepath.Join(userHomeDir, ".rpeat"), "install `directory`")
-	certCmd.StringVar(&host, "host", "", "domain name or ip `address`")
 
 	// gen-api-key
 
@@ -278,17 +265,6 @@ Usage:
 		if err != nil {
 			fmt.Println(err)
 		}
-	case "cert":
-		certCmd.Parse(os.Args[2:])
-		if certCmd.NFlag() == 0 {
-			certCmd.PrintDefaults()
-			os.Exit(2)
-		}
-		pemfiles, err := rpeat.CreateX509(host, dir, false)
-		if err != nil {
-			os.Exit(2)
-		}
-		fmt.Printf("\nSelf signed 'rpeat®' X.509 certificate and key created:\n  %s\n  %s\n\n", pemfiles.Cert, pemfiles.Key)
 	default:
 		fmt.Println(help)
 		os.Exit(2)
