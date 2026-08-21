@@ -422,7 +422,7 @@ func (c Cron) IsEvery() bool {
 	}
 	return false
 }
-func (job Job) isEvery() bool {
+func (job *Job) isEvery() bool {
 	return job.cronStartArray[0].IsEvery()
 }
 func NullCron() Cron {
@@ -433,7 +433,7 @@ func NullCron() Cron {
 func (c Cron) IsNull() bool {
 	return c.Null && !c.array
 }
-func (job Job) isCronNull() bool {
+func (job *Job) isCronNull() bool {
 	return job.cronStartArray[0].IsNull()
 }
 func DependentCron() Cron {
@@ -444,10 +444,10 @@ func DependentCron() Cron {
 func (c Cron) isDependent() bool {
 	return c.Dependent
 }
-func (job Job) isCronDependent() bool {
+func (job *Job) isCronDependent() bool {
 	return job.cronStartArray[0].isDependent()
 }
-func (job Job) isContingent() bool {
+func (job *Job) isContingent() bool {
 	return job.cronStart.Contingent
 }
 func ParseTime(timestring string, timezone string, calendar string, calendarDirs []string) (time.Time, Cron) {

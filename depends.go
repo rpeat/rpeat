@@ -160,7 +160,7 @@ func (pool *DependencyClientPool) Monitor(evts chan *depEvt) {
 			delete(pool.clients, client)
 			close(client.evts)
 		case evt := <-evts:
-			//UpdatesLogger.Printf("%s -> %s", fmt.Sprintf(InfoColor, evt.JobUUID.String()), evt.JobState.ColorizedString())
+			UpdatesLogger.Printf("%s -> %s", fmt.Sprintf(InfoColor, evt.JobUUID.String()), evt.JobState.ColorizedString())
 			for c := range pool.clients {
 				c.evts <- evt
 			}
@@ -278,7 +278,7 @@ func (d DependencyClient) delay() {
 // DependencyClient.Watch is run for each Job (Client)
 // to monitor upstream dependencies, and trigger job's
 // timer to start job.
-//func (client *DependencyClient) Watch(wg *sync.WaitGroup) {
+// func (client *DependencyClient) Watch(wg *sync.WaitGroup) {
 func (client *DependencyClient) watch() {
 	//wg.Done()
 	for {

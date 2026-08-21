@@ -350,9 +350,14 @@ func StartServer(server ServerConfig) {
 }
 
 func Shutdown(jobs jobMap) {
+	var wg sync.WaitGroup
 	for _, job := range jobs {
 		ServerLogger.Printf("SHUTDOWN check for %s:%s", job.JobUUID, job.Name)
-		go func(job *Job) {
+		wg.Add(1)
+		go func(job *Job, wg *sync.WaitGroup) {
+			time.Sleep(time.Second)
+			defer wg.Done()
+
 			if job.JobState == JRunning || job.JobState == JRetrying {
 				if job.ShutdownCmd != "" {
 					ServerLogger.Printf("Shutting down %s:%s", job.JobUUID, job.Name)
@@ -364,14 +369,15 @@ func Shutdown(jobs jobMap) {
 				time.Sleep(time.Second)
 			} else {
 				ServerLogger.Printf("Holding %s:%s", job.JobUUID, job.Name)
-				if !job.TryLock() {
+				if job.TryLock() {
 					job.Unlock()
+					job.setHold(true)
 				}
-				job.setHold(true)
 			}
-		}(job)
+			return
+		}(job, &wg)
 	}
-	time.Sleep(time.Second)
+	wg.Wait()
 	ServerLogger.Printf("SHUTDOWN complete. Exiting.\n\n")
 }
 
@@ -393,7 +399,7 @@ func (server ServerConfig) startServerHeartbeat(d time.Duration) {
 		case <-timer.C:
 			hb.Next = time.Now().Add(d).Unix() + 15
 
-			ServerLogger.Printf("sending heartbeat %s to %s/rpeat-heartbeat", hb, server.ApiEndpoint)
+			ServerLogger.Printf("sending heartbeat to %s/rpeat-heartbeat", server.ApiEndpoint)
 			server.rpeatioHeartbeat(hb)
 
 			timer.Reset(d)
@@ -556,6 +562,7 @@ func (server *ServerConfig) reloadJobs(sd *ServerData) {
 					job.Updating = false
 					d, next := NextCronStart(job.cronStartArray)
 					job.setNextStart(next)
+					job.resetTimer(d)
 					ServerLogger.Printf("Next job %s <%s> scheduled for %s [%d] (starts in %s)\n", job.Name, job.JobUUID, next, next.Unix(), d.Round(time.Second))
 					ServerLogger.Printf("completed Job update for %s [%s]", job.Name, job.JobUUID)
 					job.sendUpdateClient() // only update clients
@@ -563,7 +570,7 @@ func (server *ServerConfig) reloadJobs(sd *ServerData) {
 
 				ServerLogger.Printf("acquired runlock for %s (%s)", job.Name, job.JobUUID)
 				job.Updating = true
-				job.sendUpdate()
+				job.sendUpdateClient()
 				job.Timezone = jobs[id].Timezone
 				job.Calendar = jobs[id].Calendar
 				job.CalendarDirs = jobs[id].CalendarDirs
@@ -880,7 +887,7 @@ func dashboardHandler(w http.ResponseWriter, r *http.Request, sd *ServerData, se
 	actions := []string{"hold", "start", "stop", "restart", "info"}
 	for i := 0; i < len(job_order); i++ {
 		v := sd.jobs[job_order[i]]
-		jobs_static[job_order[i]] = *v
+		jobs_static[job_order[i]] = v.copyJob()
 		perms := make(map[string]bool)
 		for _, action := range actions {
 			perms[action] = v.hasPermission(user, action)
@@ -903,7 +910,7 @@ func dashboardHandler(w http.ResponseWriter, r *http.Request, sd *ServerData, se
 		for _, uuid := range sd.groups[group] {
 			uuidString := uuid.String()
 			if job, ok := jobs_static[uuidString]; ok {
-				j[uuidString] = job
+				j[uuidString] = job.copyJob()
 				o = append(o, uuidString)
 			}
 		}

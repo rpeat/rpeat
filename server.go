@@ -71,7 +71,7 @@ func (k service) AllJobs(user string, reqgroups []string) (jobsResponse, error) 
 	actions := []string{"hold", "start", "stop", "restart", "info"}
 	for i := 0; i < len(job_order); i++ {
 		v := k.Jobs[job_order[i]]
-		jobs_static[job_order[i]] = *v
+		jobs_static[job_order[i]] = v.copyJob()
 		perms := make(map[string]bool)
 		for _, action := range actions {
 			perms[action] = v.hasPermission(user, action)
@@ -88,7 +88,7 @@ func (k service) AllJobs(user string, reqgroups []string) (jobsResponse, error) 
 			for _, uuid := range uuids {
 				uuidString := uuid.String()
 				if job, ok := jobs_static[uuidString]; ok {
-					j[uuidString] = job
+					j[uuidString] = job.copyJob()
 					o = append(o, uuidString)
 				}
 			}
@@ -150,7 +150,7 @@ func (k service) AllStatus(user string, reqgroups []string) (jobsStatusResponse,
 	actions := []string{"hold", "start", "stop", "restart", "info", "status"}
 	for i := 0; i < len(job_order); i++ {
 		v := k.Jobs[job_order[i]]
-		jobs_static[job_order[i]] = *v
+		jobs_static[job_order[i]] = v.copyJob()
 		perms := make(map[string]bool)
 		for _, action := range actions {
 			perms[action] = v.hasPermission(user, action)
@@ -167,7 +167,7 @@ func (k service) AllStatus(user string, reqgroups []string) (jobsStatusResponse,
 			for _, uuid := range uuids {
 				uuidString := uuid.String()
 				if job, ok := jobs_static[uuidString]; ok {
-					j[uuidString] = job
+					j[uuidString] = job.copyJob()
 					o = append(o, uuidString)
 				}
 			}
@@ -246,7 +246,6 @@ func (k service) ServerInfo(user string) (*ServerConfig, error) {
 }
 
 // api endpoint behaviors Hold, Stop, Start, Restart
-//
 func (k service) Hold(jobid string, user string, comment, duration string) (*controlResponse, error) {
 	ServerLogger.Printf("\tHOLD\tJobUUID: %s\tuser:%s", jobid, user)
 	job, ok := k.Jobs[jobid]
@@ -358,7 +357,6 @@ func (k service) Resume(jobid string, user string) (*JobUpdateParams, error) {
 }
 
 // request/response structures
-//
 var ErrEmpty = errors.New("empty string")
 var ErrPermission = errors.New("insufficient permission")
 
@@ -466,9 +464,11 @@ func makeInfoEndpoint(svc Service) endpoint.Endpoint {
 		req := request.(kRequest)
 		job, err := svc.Info(req.JobID, req.UserID)
 		if err != nil {
-			return kResponse{*job, err.Error()}, nil
+			//return kResponse{*job, err.Error()}, nil
+			return kResponse{job.copyJob(), err.Error()}, nil
 		}
-		return kResponse{*job, ""}, nil
+		//return kResponse{*job, ""}, nil
+		return kResponse{job.copyJob(), ""}, nil
 	}
 }
 func makeLogEndpoint(svc Service) endpoint.Endpoint {
@@ -503,7 +503,6 @@ func makeServerRestartEndpoint(svc Service) endpoint.Endpoint {
 }
 
 // endpoints (controls)
-//
 func makeHoldEndpoint(svc Service) endpoint.Endpoint {
 	return func(_ context.Context, request interface{}) (interface{}, error) {
 		req := request.(kRequest)
@@ -556,7 +555,6 @@ func makeStatusEndpoint(svc Service) endpoint.Endpoint {
 }
 
 // request decoders
-//
 func decodeJobsRequest(_ context.Context, r *http.Request) (interface{}, error) {
 	var request jobsRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
@@ -593,7 +591,6 @@ func decodeKRequest(_ context.Context, r *http.Request) (interface{}, error) {
 }
 
 // response encoders
-//
 func encodeInfoResponse(_ context.Context, w http.ResponseWriter, response interface{}) error {
 	if response.(kResponse).Job.(Job).JobUUID.String() == "00000000-0000-0000-0000-000000000000" {
 		empty := kResponse{}
