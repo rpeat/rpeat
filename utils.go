@@ -17,6 +17,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	//"runtime"
 )
 
 const (
@@ -473,7 +474,7 @@ func evaluatedCmd(job *Job, shutdown bool, asof string) (exec.Cmd, error) {
 	}
 
 	if v.execErr != nil {
-		vErrors = append(vErrors, ValidationError{JobName: job.Name, Msg: v.execErr.Error(), Exception: Exec})
+		//vErrors = append(vErrors, ValidationError{JobName: job.Name, Msg: v.execErr.Error(), Exception: Exec})
 	}
 	if len(v.envVarsMissing) > 0 || len(v.cmdVarsMissing) > 0 {
 		var envvars, cmdvars string
@@ -499,7 +500,7 @@ func evaluatedCmd(job *Job, shutdown bool, asof string) (exec.Cmd, error) {
 func (job *Job) ExpandEnv(vars []string, asof string) []string {
 	v, err := expandAllVars(job, vars, job.Cmd, false, asof)
 	if err != nil {
-		ServerLogger.Printf("WARNING: Environment Variables required but undefined: %v", v.envVarsMissing)
+		ServerLogger.Printf("Warning: Environment Variables required but undefined: %v", v.envVarsMissing)
 	}
 	return v.expandedVars
 }
@@ -522,6 +523,8 @@ func stripVars(s string) ([]string, string) {
 }
 
 func expandAllVars(job *Job, vars []string, cmd *string, shutdown bool, asof string) (expandAllVarsOutput, error) {
+	//_, filename, line, _ := runtime.Caller(1)
+	//ServerLogger.Printf("[expandAllVars] %s:%d", filename, line)
 
 	evo := expandAllVarsOutput{}
 
@@ -590,9 +593,19 @@ func expandAllVars(job *Job, vars []string, cmd *string, shutdown bool, asof str
 	}
 	c := exec.Cmd{}
 	if len(args) > 0 {
+		if !isShell(args[0]) && isShell(job.Shell) {
+			args = append([]string{job.Shell, "-c"}, args...)
+		}
 		c.Path = args[0]
+		cmdpath, execerr := exec.LookPath(c.Path)
+		if execerr != nil {
+			evo.execErr = execerr
+			cmdpath = c.Path
+		} else {
+			c.Path = cmdpath
+		}
 		if len(args) > 1 {
-			c.Args = []string{args[0], args[1], strings.Join(args[2:], " ")}
+			c.Args = []string{cmdpath, args[1], strings.Join(args[2:], " ")}
 		} else {
 			c.Args = args[:]
 		}
@@ -611,7 +624,6 @@ func expandAllVars(job *Job, vars []string, cmd *string, shutdown bool, asof str
 		} else {
 			job.CmdEval = cmdEvalString
 		}
-		evo.execErr = isExecutable(os.Expand(c.Path, getenv))
 	}
 	evo.execCmd = c
 	evo.cmdVarsMissing = cmdmissing
@@ -648,4 +660,17 @@ func isExecutable(file string) error {
 		return nil
 	}
 	return os.ErrPermission
+}
+func isShell(name string) bool {
+	path, err := exec.LookPath(name)
+	if err != nil {
+		return false
+	}
+	base := filepath.Base(path)
+	switch base {
+	case "sh", "bash", "zsh", "fish", "ksh", "dash", "csh", "tcsh":
+		return true
+	default:
+		return false
+	}
 }

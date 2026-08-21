@@ -7,7 +7,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/gob"
-	"encoding/json"
+	//"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -195,22 +195,31 @@ type JobSpec struct {
 	Disabled bool  `json:"Disabled,omitempty" xml:"Disabled,omitempty"`
 	Hidden   bool  `json:"Hidden,omitempty" xml:"Hidden,omitempty"`
 
-	// Commands defining what runs on trigger
-	//   - Shell (not implemented) controls what shell to run
+	// Shell controls what shell to run. This will preceed
+	// any Cmd if specified and a shell has not been specified on command line
 	//
-	//   - Cmd is string run by scheduler.  Like cron, if bash-style behavior
+	Shell *string `json:"Shell,omitempty"`
+
+	// Commands defining what runs on trigger
+	//
+	//   - Cmd is string run by scheduler.  Like cron, if shell-style behavior
 	//     is required it should be of form:
+	//
 	//       Cmd: "/bin/sh -c echo 'hello'"
 	//         -- or --
 	//       <Cmd>/bin/sh -c echo 'hello'</Cmd>
 	//
+	//         -- or using <Shell>/bin/bash</Shell> --
+	//
+	//       <Cmd>echo 'hello'</Cmd>
+	//
 	//     In almost all cases this must be set or your job will fail. Shells enable
-	//     most all path settings, binaries, etc.
+	//     most all path settings and features like pipes. Setting the "Shell" in config or
+	//     in a Job removes the need to specify it in Cmd
 	//
 	//
 	//   - ShutdownCmd is used to terminate a job when required, possibly gracefully (api or external command)
 	//   - ShutdownSig is used to terminate a job when required by sending a signal to process (i.e. Control-C (SIGINT) or (SIGKILL))
-	Shell       *string `json:"Shell,omitempty"`
 	Cmd         *string `json:"Cmd,omitempty"`
 	ShutdownCmd string  `json:"ShutdownCmd,omitempty" xml:"ShutdownCmd,omitempty"`
 	ShutdownSig string  `json:"ShutdownSig,omitempty" xml:"ShutdownSig,omitempty"`
@@ -618,8 +627,8 @@ type JobLogging struct {
 	stdoutFile  string
 	stderrFile  string
 	Logs        []JobLog `json:"Logs,omitempty" xml:"Logs,omitempty"`
-	StdoutStats LogStats `json:"Stats,omitempty" xml:"State,omitempty"`
-	StderrStats LogStats `json:"Stats,omitempty" xml:"State,omitempty"`
+	StdoutStats LogStats `json:"StdoutStats,omitempty" xml:"StdoutStats,omitempty"`
+	StderrStats LogStats `json:"StderrStats,omitempty" xml:"StderrStats,omitempty"`
 	purge       time.Duration
 	l           *time.Timer
 }
@@ -754,8 +763,9 @@ func (job *Job) SaveSnapshot(compress bool) {
 	}
 
 	var job_ Job
-	data, _ := json.Marshal(job)
-	json.Unmarshal(data, &job_)
+	job_ = job.copyJob()
+	//data, _ := json.Marshal(job)
+	//json.Unmarshal(data, &job_)
 
 	var buf bytes.Buffer
 	if compress {
@@ -773,8 +783,9 @@ func (job *Job) SaveSnapshot(compress bool) {
 	}
 	ServerLogger.Printf("Saved %s job to %s", job.Name, jobfile)
 }
-func (job Job) SerializeGZ(buf *bytes.Buffer) {
+func (job *Job) SerializeGZ(buf *bytes.Buffer) {
 	encoder := gob.NewEncoder(buf)
+	//err := encoder.Encode(job.copyJob())
 	err := encoder.Encode(job)
 	if err != nil {
 		ServerLogger.Fatal("unable to serialize job ", job.JobUUID, err.Error())
@@ -786,7 +797,7 @@ func (job Job) SerializeGZ(buf *bytes.Buffer) {
 	*buf = gzb
 }
 
-func (job Job) Serialize(buf *bytes.Buffer) {
+func (job *Job) Serialize(buf *bytes.Buffer) {
 	encoder := gob.NewEncoder(buf)
 	err := encoder.Encode(job)
 	if err != nil {
@@ -1249,7 +1260,7 @@ func (job *Job) setJobState(s JState) error {
 				job.sendUpdate()
 			})
 		} else {
-			ServerLogger.Printf("no hold release on", job.JobUUID)
+			ServerLogger.Printf("no hold release on %s", job.JobUUID)
 		}
 		job.addHistory()
 	case JSuccess, JManualSuccess, JEnd, JRetryFailed, JDepWarning, JDepFailed, JStopped:
@@ -1289,7 +1300,6 @@ func (job *Job) WaitForTrigger(stop <-chan bool) error {
 			return errors.New("job stopped")
 		}
 	}
-	return nil
 }
 func (job *Job) resetTimer(d time.Duration) {
 	job.Lock()

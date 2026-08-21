@@ -8,6 +8,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"github.com/google/uuid"
+	"html"
 	"io/ioutil"
 	"math"
 	"os"
@@ -67,7 +68,7 @@ type ServerStatus struct {
 	updated        int64    // unix timestamp
 }
 
-//  main server data object
+// main server data object
 type ServerData struct {
 	svc          *service
 	jobs         jobMap
@@ -130,6 +131,7 @@ type ServerConfig struct {
 	Permissions      Permission
 	Origin           int64 `json:"Origin,omitempty" xml:"Origin,omitempty"`
 	Timezone         string
+	Shell            string     `json:"Shell" xml:"Shell"`
 	Clean            bool       `json:"Clean,omitempty" xml:"Clean,omitempty"`
 	KeepHistory      bool       `json:"KeepHistory,omitempty" xml:"KeepHistory,omitempty"`
 	MaxHistory       int        `json:"MaxHistory,omitempty" xml:"MaxHistory,omitempty"`
@@ -264,7 +266,7 @@ func jsonJobSpecLoader(config string) (specs []JobSpec, err error) {
 	err = json.Unmarshal(byteval, &specs)
 	if err != nil {
 		// check err type: if UnmarshalTypeError it may be that Jobs file is missing arrays structure or something else
-		ServerLogger.Printf("[LoadJobSpec] configuration error encountered, aborting:", err)
+		ServerLogger.Printf("[LoadJobSpec] configuration error encountered, aborting: %s", err)
 		if typeErr, ok := err.(*json.UnmarshalTypeError); ok {
 			var jobspecarray []JobSpec
 			if typeErr.Type == reflect.TypeOf(jobspecarray) {
@@ -315,7 +317,7 @@ func jsonJobSpecLoader(config string) (specs []JobSpec, err error) {
 				}
 			}
 			jerr = fmt.Sprintln(jerr)
-			fmt.Printf(jerr)
+			fmt.Printf("%s", jerr)
 		} else {
 			ServerLogger.Fatal("[rpeat] unknown error occured while loading jobs json file", err.Error())
 		}
@@ -452,7 +454,7 @@ func LoadJobSpec(config string, maxhistory int, templates map[string]JobSpec, sc
 		// specs are top-level jobs which may contain .Jobs themselves (max one-level nesting)
 		// i iterates over top-level
 		// j iterates over top-level PLUS Jobs
-		jobs[j] = Job{Disabled: true, Timezone: sconf.Timezone, MaxHistory: sconf.MaxHistory, ServerName: sconf.Name, ServerKey: serverkey, src: config, apiKey: sconf.ApiKey}
+		jobs[j] = Job{Disabled: true, Timezone: sconf.Timezone, MaxHistory: sconf.MaxHistory, Shell: sconf.Shell, ServerName: sconf.Name, ServerKey: serverkey, src: config, apiKey: sconf.ApiKey}
 
 		// copy inherited template (if any) into new Job[j]
 		if specs[i].Inherits != nil && !specs[i].isTemplate() {
@@ -466,7 +468,7 @@ func LoadJobSpec(config string, maxhistory int, templates map[string]JobSpec, sc
 				jobs[j].copyJobSpec(&tmpspec)
 				jobs[j].InheritanceChain = tmpl.InheritanceChain
 			} else {
-				msg := fmt.Sprintf("Template '%#s' Not Found for '%s'", *(specs[i].Inherits), specs[i].Name)
+				msg := fmt.Sprintf("Template '%s' Not Found for '%s'", *(specs[i].Inherits), specs[i].Name)
 				jobs[j].jve.AddWarning(ValidationWarning{Msg: msg, Exception: Template})
 			}
 			jobs[j].LocalEnv = EnvList([]string{})
@@ -481,7 +483,7 @@ func LoadJobSpec(config string, maxhistory int, templates map[string]JobSpec, sc
 				jobs[j].Logging.Purge = logging.Purge
 			}
 		}
-		parentJob := jobs[j]
+		parentJob := jobs[j].copyJob()
 		currentUUID = jobs[j].JobUUID
 		specs[i].JobUUID = currentUUID
 		if jobs[j].Disabled {
@@ -691,6 +693,9 @@ func (job *JobSpec) copyTemplate(spec JobSpec) {
 	if spec.CronRestart != nil {
 		job.CronRestart = spec.CronRestart
 	}
+	if spec.Jitter != nil {
+		job.Jitter = spec.Jitter
+	}
 	if spec.StartRule != nil {
 		job.StartRule = spec.StartRule
 	}
@@ -767,7 +772,7 @@ func (job *Job) copyJobSpec(spec *JobSpec) {
 	}
 	if job.Group == nil {
 		if spec.Group == nil {
-			job.Group = []string{"&nbsp;"}
+			job.Group = []string{""}
 		} else {
 			job.Group = spec.Group
 		}
@@ -848,6 +853,9 @@ func (job *Job) copyJobSpec(spec *JobSpec) {
 	//}
 	if spec.CronRestart != nil {
 		job.CronRestart = spec.CronRestart
+	}
+	if spec.Jitter != nil {
+		job.Jitter = *spec.Jitter
 	}
 	if spec.StartDay != nil {
 		job.StartDay = *spec.StartDay
@@ -930,6 +938,103 @@ func (job *Job) copyJobSpec(spec *JobSpec) {
 	job.History = make([]JobHistory, 10)
 	job.src = spec.src
 }
+
+// deepcopy job to avoid copying hidden fields and shallow for read-only
+func (job *Job) copyJob() Job {
+	if job.TryLock() {
+		defer job.Unlock()
+	}
+
+	jobc := Job{}
+
+	jobc.Name = job.Name
+	jobc.Description = job.Description
+	jobc.Comment = job.Comment
+	jobc.JobUUID = job.JobUUID
+	jobc.RunUUID = job.RunUUID
+	jobc.Type = job.Type
+	jobc.Tags = make([]string, len(job.Tags))
+	copy(jobc.Tags, job.Tags)
+	jobc.Group = job.Group
+	jobc.Disabled = job.Disabled
+	jobc.Inherits = job.Inherits
+	// DO NOT UPDATE InheritanceChain as this is taken care of in Templates
+	jobc.Cmd = job.Cmd
+	jobc.ShutdownCmd = job.ShutdownCmd
+	jobc.ShutdownSig = job.ShutdownSig
+	jobc.Shell = job.Shell
+	jobc.Env = make([]string, len(job.Env))
+	copy(jobc.Env, job.Env)
+	jobc.DateEnv = make([]string, len(job.DateEnv))
+	copy(jobc.DateEnv, job.DateEnv)
+	jobc.Timezone = job.Timezone
+	jobc.Calendar = job.Calendar
+	jobc.Rollback = job.Rollback
+	jobc.CronStart = job.CronStart
+	jobc.CronStartArray = make([]string, len(job.CronStartArray))
+	copy(jobc.CronStartArray, job.CronStartArray)
+	jobc.CronEnd = job.CronEnd
+	jobc.CronEndArray = make([]string, len(job.CronEndArray))
+	copy(jobc.CronEndArray, job.CronEndArray)
+	jobc.CronRestart = job.CronRestart
+	jobc.Jitter = job.Jitter
+	jobc.StartDay = job.StartDay
+	jobc.StartTime = job.StartTime
+	jobc.EndDay = job.EndDay
+	jobc.EndTime = job.EndTime
+	jobc.StartRule = job.StartRule
+	jobc.Dependency = job.Dependency
+	jobc.Hold = job.Hold
+	jobc.HoldDuration = job.HoldDuration
+	jobc.Retry = job.Retry
+	jobc.RetryWait = job.RetryWait
+	jobc.RetryReset = job.RetryReset
+	jobc.MissedReset = job.MissedReset
+	jobc.MaxRuntime = job.MaxRuntime
+	jobc.MinRuntime = job.MinRuntime
+	jobc.MaxDuration = job.MaxDuration
+	jobc.Logging = job.Logging
+	jobc.CalendarDirs = job.CalendarDirs
+	jobc.Host = job.Host
+	jobc.User = job.User
+	jobc.Admin = job.Admin
+	jobc.History = job.History
+	jobc._location = job._location
+	jobc.src = job.src
+
+	jobc.ServerName = job.ServerName
+	jobc.ServerKey = job.ServerKey
+	jobc.Pid = job.Pid
+	jobc.Unscheduled = job.Unscheduled
+	jobc.Restarting = job.Restarting
+	jobc.IsRunning = job.IsRunning
+	jobc.Failed = job.Failed
+	jobc.ExitCode = job.ExitCode
+	jobc.JobState = job.JobState
+	jobc.JobStateString = job.JobStateString
+	jobc.PrevJobState = job.PrevJobState
+	jobc.PrevJobStateString = job.PrevJobStateString
+	jobc.RetryAttempt = job.RetryAttempt
+	jobc.PrevStart = job.PrevStart
+	jobc.PrevStop = job.PrevStop
+	jobc.Started = job.Started
+	jobc.Elapsed = job.Elapsed
+	jobc.ElapsedUNIX = job.ElapsedUNIX
+	jobc.NextStart = job.NextStart
+
+	jobc.Updating = job.Updating
+	jobc.MaxHistory = job.MaxHistory
+	jobc.StartedUNIX = job.StartedUNIX
+	jobc.PrevStopUNIX = job.PrevStopUNIX
+	jobc.NextStartUNIX = job.NextStartUNIX
+	jobc.StdoutFile = make([]string, len(job.StdoutFile))
+	copy(jobc.StdoutFile, job.StdoutFile)
+	jobc.StderrFile = make([]string, len(job.StderrFile))
+	copy(jobc.StderrFile, job.StderrFile)
+
+	return jobc
+}
+
 func (job *Job) LoadLocation() {
 	var tzerr error
 	job._location, tzerr = time.LoadLocation(job.Timezone)
@@ -940,29 +1045,30 @@ func (job *Job) LoadLocation() {
 }
 
 // xml <-> json conversion
-func ConvertJobsFile(jobsFile string) {
+func ConvertJobsFile(jobsFile string, asHtml, asXml bool) {
 	templ := make(map[string]JobSpec)
 	var logging JobLogging
 	_, specs, _, isXML, _ := LoadJobSpec(jobsFile, 0, templ, ServerConfig{}, "", "", "", logging)
-	if isXML {
+	if (isXML || asHtml) && !asXml {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "    ")
 		enc.SetEscapeHTML(false) // disable unicode coercion
-		//enc.Encode(userspec)
 		enc.Encode(specs)
 	} else {
-		xmlJobs := Jobs{Jobs: specs, XMLName: xml.Name{"", "Jobs"}}
+		xmlJobs := Jobs{Jobs: specs, XMLName: xml.Name{Space: "", Local: "Jobs"}}
 		x, err := xml.MarshalIndent(xmlJobs, "", "  ")
 		if err != nil {
 			panic(err)
 		}
-		fmt.Println(string(x))
+		xmls := string(x)
+		xmls = html.UnescapeString(xmls)
+		fmt.Println(xmls)
 	}
 }
 
-//func LoadConfig(home, config string, clean, keephistory bool, maxhistory int, servername string, serverkey string, apikey string, logging JobLogging) (ServerJobs, error) {
-//	return LoadConfig2(home, []string{config}, clean, keephistory, maxhistory, servername, serverkey, apikey, logging)
-//}
+//	func LoadConfig(home, config string, clean, keephistory bool, maxhistory int, servername string, serverkey string, apikey string, logging JobLogging) (ServerJobs, error) {
+//		return LoadConfig2(home, []string{config}, clean, keephistory, maxhistory, servername, serverkey, apikey, logging)
+//	}
 func LoadConfig2(home string, jobsFiles []string, sconf ServerConfig, clean, keephistory bool, maxhistory int, servername string, serverkey string, apikey string, logging JobLogging) (ServerJobs, error) {
 
 	var err error
@@ -984,7 +1090,7 @@ func LoadConfig2(home string, jobsFiles []string, sconf ServerConfig, clean, kee
 		alljobs = append(alljobs, jobs...)
 
 		if isXML {
-			xmlJobs := Jobs{Jobs: specs, XMLName: xml.Name{"", "Jobs"}}
+			xmlJobs := Jobs{Jobs: specs, XMLName: xml.Name{Space: "", Local: "Jobs"}}
 			x, err := xml.MarshalIndent(xmlJobs, "", "  ")
 			if err != nil {
 				panic(err)

@@ -286,6 +286,7 @@ var JobView = `
       <a class=cronstart><b>CronStart</b>: {{ .Job.CronStart }}</a>
       <a class=cronend><b>CronEnd</b>: {{ .Job.CronEnd }}</a>
       <a class=cronrestart><b>CronRestart</b>: {{ .Job.CronRestart }}</a>
+      <a class=jitter><b>CronRestart</b>: {{ .Job.Jitter }}</a>
     {{end}}
     </div>
   </td>
@@ -437,6 +438,7 @@ var JobsTable = `
           <a class=cronstart><b>CronStart</b>: {{ $job.CronStart }}</a>
           <a class=cronend><b>CronEnd</b>: {{ $job.CronEnd }}</a>
           <a class=cronrestart><b>CronRestart</b>: {{ $job.CronRestart }}</a>
+          <a class=jitter><b>Jitter</b>: {{ $job.Jitter }}</a>
         {{end}}
         </div>
       </td>
@@ -1410,7 +1412,7 @@ td.schedule, a.schedule {
   font-size: 90%;
   text-align: center;
 }
-a.cronstart, a.cronend, a.cronrestart {
+a.cronstart, a.cronend, a.cronrestart, a.jitter {
   width: 30ch;
   /*padding: 1ch;*/
   /*padding-left: 1.5ch;*/
