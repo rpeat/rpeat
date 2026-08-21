@@ -59,23 +59,25 @@ func RegisterJob(job *Job, updates chan *JobUpdate, depEvt chan *depEvt, stop <-
 			select {
 			case <-job.Logging.l.C:
 				job.Lock()
-				e := job.Logging.Logs[0] // log(s) to be removed
-				job.Logging.Logs = job.Logging.Logs[1:]
-				lfiles := e.LogFiles
-				ServerLogger.Printf("LOG CLEANUP %s:%s stderr:%s", job.JobUUID, job.Name, strings.Join(lfiles, ","))
-				for _, lf := range lfiles {
-					if err := os.Remove(lf); err != nil {
-						ServerLogger.Printf("Error removing %s: %s", lf, err)
-					}
-				}
 				if len(job.Logging.Logs) > 0 {
-					n := job.Logging.Logs[0] // next log(s) in time
-					removeAt := n.PrevStop.Add(job.Logging.purge)
-					ServerLogger.Printf("Setting logs removal on %s:%s for %s", job.JobUUID, job.RunUUID, removeAt.Round(time.Second))
-					job.Logging.l.Reset(removeAt.Sub(time.Now()))
-					//job.Logging.l.Reset(n.Value.(JobLog).prevStop.Add(time.Duration(time.Second * 70)).Sub(time.Now()))
+					e := job.Logging.Logs[0] // log(s) to be removed
+					job.Logging.Logs = job.Logging.Logs[1:]
+					lfiles := e.LogFiles
+					ServerLogger.Printf("LOG CLEANUP %s:%s stderr:%s", job.JobUUID, job.Name, strings.Join(lfiles, ","))
+					for _, lf := range lfiles {
+						if err := os.Remove(lf); err != nil {
+							ServerLogger.Printf("Error removing %s: %s", lf, err)
+						}
+					}
+					if len(job.Logging.Logs) > 0 {
+						n := job.Logging.Logs[0] // next log(s) in time
+						removeAt := n.PrevStop.Add(job.Logging.purge)
+						ServerLogger.Printf("Setting logs removal on %s:%s for %s", job.JobUUID, job.RunUUID, removeAt.Round(time.Second))
+						job.Logging.l.Reset(removeAt.Sub(time.Now()))
+						//job.Logging.l.Reset(n.Value.(JobLog).prevStop.Add(time.Duration(time.Second * 70)).Sub(time.Now()))
+					}
+					job.SaveSnapshot(true)
 				}
-				job.SaveSnapshot(true)
 				job.Unlock()
 			}
 		}
@@ -91,7 +93,7 @@ func RegisterJob(job *Job, updates chan *JobUpdate, depEvt chan *depEvt, stop <-
 		// job has been triggered  |
 		//                         |
 		//                         V
-		ServerLogger.Printf("Is 'unscheduled' Trigger? %t", job.Unscheduled)
+		ServerLogger.Printf("Is %s 'unscheduled' Trigger? %t", job.Name, job.Unscheduled)
 
 		job.runlock.Lock()
 		job.t.Stop()
@@ -336,7 +338,7 @@ func runTik(job *Job, pid chan int, retry bool) {
 
 		c, err := evaluatedCmd(job, false, "")
 		if err != nil {
-			ServerLogger.Printf(err.Error())
+			ServerLogger.Printf("%s", err.Error())
 		}
 
 		// Kill child processes under *nix
@@ -411,7 +413,7 @@ func runTik(job *Job, pid chan int, retry bool) {
 		err = c.Start()
 		if err != nil {
 			ServerLogger.Printf("[runTik] %s failed to start with error ( %s )", job.Name, err)
-			job.Lock()
+
 			job.pid = 0
 			job.Pid = 0
 			pid <- 0
@@ -429,14 +431,9 @@ func runTik(job *Job, pid chan int, retry bool) {
 			job.Elapsed = dhms(job.elapsed)
 			job.ElapsedUNIX = elapsedToInt(job.elapsed)
 			job.Unscheduled = true
-			_, err := c.Stderr.Write([]byte("[ rpeat ] Unable to create process (possibly missing shell e.g. /bin/sh -c ): " + err.Error()))
+			c.Stderr.Write([]byte("[ rpeat ] Unable to create process (possibly missing shell e.g. /bin/sh -c ): " + err.Error()))
 			retry = false
-			if err != nil {
-				panic(err)
-			}
-
 			job.status <- -1
-			job.lock.Unlock()
 			job.setJobState(JFailed)
 			job.sendUpdate()
 			return
@@ -509,7 +506,6 @@ func runTik(job *Job, pid chan int, retry bool) {
 	}
 
 	select {
-	//case evt = <-ctl:
 	case evt = <-job.Ctl:
 		//job.ExitCode = int(evt.code)
 		job.ExitCode = errcode
