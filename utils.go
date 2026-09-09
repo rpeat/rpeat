@@ -674,3 +674,14 @@ func isShell(name string) bool {
 		return false
 	}
 }
+
+func fixQuotes(s string) string {
+	s = strconv.Quote(s)
+	if len(s) >= 2 {
+		lastchar := s[len(s)-1]
+		if lastchar == s[0] && (lastchar == '"' || lastchar == '\'') {
+			return s[1 : len(s)-1]
+		}
+	}
+	return s
+}

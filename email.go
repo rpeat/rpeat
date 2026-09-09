@@ -11,33 +11,6 @@ import (
 )
 
 // https://stackoverflow.com/questions/58804817/setting-up-standard-go-net-smtp-with-office-365-fails-with-error-tls-first-rec
-
-var DefaultEmailMessage = `
-Name: {{ .Name }}<br/>
-Status: {{ .JobStateString }}<br/>
-<br/>
-Elapsed: {{ .Elapsed }}<br/>
-Started: {{ .Started }} {{ .Timezone }}<br/>
-Ended: {{ .PrevStop }} {{ .Timezone }}<br/>
-<hr/>
-Cmd: {{ .CmdEval }}<br/>
-StdOut:<br/>
-<pre>
-{{ .StdOut }}
-</pre>
-<br/>
-StdErr:<br/>
-<pre>
-{{ .StdErr }}
-</pre>
-<br/>
-<hr/>
-JobUUID: {{ .JobUUID }}<br/>
-RunUUID: {{ .RunUUID }}<br/>
-<br/>
-<img src="https://rpeat.io/assets/img/poweredbyrpeat.png"/>
-`
-
 type loginAuth struct {
 	username, password string
 }
@@ -86,7 +59,6 @@ func smtpAlert(alert AlertParams) error {
 	if alert.Alert.From != nil {
 		From = fmt.Sprintf("From: %s <%s>\r\n", *alert.Alert.From, user_pw[0])
 	}
-	fmt.Println("From: ", From)
 
 	var to, To []string
 	if alert.Alert.To != nil {
@@ -116,7 +88,7 @@ func smtpAlert(alert AlertParams) error {
 	}
 	subject = "Subject: " + subject + "\r\n"
 	mime := "MIME-version: 1.0;\nContent-Type: text/html; charset=\"UTF-8\";\r\n\r\n"
-	message := DefaultEmailMessage
+	message := DefaultAlertMessageHTML
 	if alert.Alert.Message != nil {
 		message = *alert.Alert.Message + "<br><br><img src='https://rpeat.io/assets/img/poweredbyrpeat.png'/>"
 	}
@@ -124,7 +96,7 @@ func smtpAlert(alert AlertParams) error {
 	var msgBuf bytes.Buffer
 	tmpl, err := template.New("Msg").Parse(message)
 	if err != nil {
-		tmpl, _ = template.New("Msg").Parse(DefaultEmailMessage)
+		tmpl, _ = template.New("Msg").Parse(DefaultAlertMessageHTML)
 	}
 	tmpl.Execute(&msgBuf, alert)
 

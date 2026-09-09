@@ -3,7 +3,12 @@ package rpeat
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"html/template"
 	"net/http"
+	"strconv"
+	"strings"
+	"time"
 )
 
 type Endpoint struct {
@@ -135,11 +140,11 @@ type AlertParams struct {
 	StdErrFile     string
 	History        []string
 	// Permissions (users with view access, log access)
-	Type      string
-	NoRpeatio bool
-	Endpoint  string `json:"Endpoint,omitempty"`
-	ApiKey    string `json:"ApiKey,omitempty"`
-	Alert     Alert
+	Type     string
+	Rpeatio  bool
+	Endpoint string `json:"Endpoint,omitempty"`
+	ApiKey   string `json:"ApiKey,omitempty"`
+	Alert    Alert
 
 	// flag to handle case where event occurs but should not alert
 	send bool
@@ -280,10 +285,24 @@ func (job *Job) sendAlert() {
 		gmailAlert(p)
 	case "office365":
 		office365Alert(p)
+	case "json":
+		jsonAlert(p)
+	case "html":
+		htmlAlert(p)
+	case "plaintext", "text":
+		plaintextAlert(p)
+	case "markdown":
+		markdownAlert(p)
+	case "discord":
+		discordAlert(p)
+	case "slack":
+		slackAlert(p)
+	default:
+		ServerLogger.Printf("Unsupported Alert Type: %s", p.Type)
 	}
 
-	if p.Type != "rpeat" && !p.NoRpeatio {
-		rpeatioAlert(p)
+	if p.Type != "rpeat" && p.Rpeatio {
+		go rpeatioAlert(p)
 	}
 
 }
@@ -350,4 +369,364 @@ func (server ServerConfig) rpeatioHeartbeat(hb HeartbeatParams) {
 	}
 	ConnectionLogger.Printf("rpeat® rpeat.Alert Server Status: %s", resp.Status)
 	resp.Body.Close()
+}
+
+var DefaultAlertMessageHTML = `
+Name: {{ .Name }}<br/>
+Status: {{ .JobStateString }}<br/>
+<br/>
+Elapsed: {{ .Elapsed }}<br/>
+Started: {{ .Started }} {{ .Timezone }}<br/>
+Ended: {{ .PrevStop }} {{ .Timezone }}<br/>
+<hr/>
+Cmd: {{ .CmdEval }}<br/>
+StdOut:<br/>
+<pre>
+{{ .StdOut }}
+</pre>
+<br/>
+StdErr:<br/>
+<pre>
+{{ .StdErr }}
+</pre>
+<br/>
+<hr/>
+JobUUID: {{ .JobUUID }}<br/>
+RunUUID: {{ .RunUUID }}<br/>
+<br/>
+<img src="https://rpeat.io/assets/img/poweredbyrpeat.png"/>
+`
+var DefaultAlertMessageMarkdown = `
+**Server**: rpeat-{{ .ServerName }}
+**Name:** {{ .Name }}
+**Status:** {{ .JobStateString }}
+
+**Elapsed:** {{ .Elapsed }}
+**Started:** {{ .Started }} {{ .Timezone }}
+**Ended:** {{ .PrevStop }} {{ .Timezone }}
+
+**Cmd:** {{ .CmdEval }}
+
+**Stdout:**
+` + "```" + `
+{{ .StdOut }}
+` + "```" + `
+
+**Stderr:**
+` + "```" + `
+{{ .StdErr }}
+` + "```" + `
+--
+**JobUUID:** {{ .JobUUID }}
+**RunUUID:** {{ .RunUUID }}
+
+`
+
+var DefaultAlertMessagePlainText = `
+Server: rpeat-{{ .ServerName }}
+Name: {{ .Name }}
+Status: {{ .JobStateString }}
+
+Elapsed: {{ .Elapsed }}
+Started: {{ .Started }} {{ .Timezone }}
+Ended: {{ .PrevStop }} {{ .Timezone }}
+
+Cmd: {{ .CmdEval }}
+--
+JobUUID: {{ .JobUUID }}
+RunUUID: {{ .RunUUID }}
+`
+
+// Integrations
+
+func teamsAlert(alert AlertParams) error {
+	return nil
+}
+func telegramAlert(alert AlertParams) error {
+	return nil
+}
+
+func jsonAlert(alert AlertParams) error {
+	j, err := json.Marshal(alert)
+	if err != nil {
+		ServerLogger.Println(err)
+		return err
+	}
+	req, err := http.NewRequest("POST", alert.Endpoint, bytes.NewBuffer(j))
+	if err != nil {
+		ServerLogger.Println("failed json alert:", err)
+		return err
+	}
+	req.Header.Set("Content-Type", "text/json") // Set headers
+
+	client := &http.Client{Timeout: 10 * time.Second} // Set timeout
+	resp, err := client.Do(req)
+	if err != nil {
+		ServerLogger.Println(err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	return nil
+}
+func plaintextAlert(alert AlertParams) error {
+	var msgBuf bytes.Buffer
+	tmpl, _ := template.New("Msg").Parse(DefaultAlertMessagePlainText)
+	alert.CmdEval = strconv.Quote(alert.CmdEval)
+	tmpl.Execute(&msgBuf, alert)
+	msgBuf = *(bytes.NewBuffer(replaceHTML(msgBuf.Bytes())))
+
+	req, _ := http.NewRequest("POST", alert.Endpoint, &msgBuf)
+	req.Header.Set("Content-Type", "text/html; charset=utf-8") // Set headers
+
+	client := &http.Client{Timeout: 10 * time.Second} // Set timeout
+	resp, err := client.Do(req)
+	if err != nil {
+		ServerLogger.Println(err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	return nil
+}
+func htmlAlert(alert AlertParams) error {
+	var msgBuf bytes.Buffer
+	tmpl, _ := template.New("Msg").Parse("Server: {{ .ServerName }}<br/>" + DefaultAlertMessageHTML)
+	alert.CmdEval = strconv.Quote(alert.CmdEval)
+	tmpl.Execute(&msgBuf, alert)
+	msgBuf = *(bytes.NewBuffer(replaceHTML(msgBuf.Bytes())))
+
+	req, _ := http.NewRequest("POST", alert.Endpoint, &msgBuf)
+	req.Header.Set("Content-Type", "text/html; charset=utf-8") // Set headers
+
+	client := &http.Client{Timeout: 10 * time.Second} // Set timeout
+	resp, err := client.Do(req)
+	if err != nil {
+		ServerLogger.Println(err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	return nil
+}
+func markdownAlert(alert AlertParams) error {
+	var msgBuf bytes.Buffer
+	tmpl, _ := template.New("Msg").Parse(DefaultAlertMessageMarkdown)
+	alert.CmdEval = strconv.Quote(alert.CmdEval)
+	tmpl.Execute(&msgBuf, alert)
+	msgBuf = *(bytes.NewBuffer(replaceHTML(msgBuf.Bytes())))
+
+	req, _ := http.NewRequest("POST", alert.Endpoint, &msgBuf)
+	req.Header.Set("Content-Type", "text/markdown") // Set headers
+
+	client := &http.Client{Timeout: 10 * time.Second} // Set timeout
+	resp, err := client.Do(req)
+	if err != nil {
+		ServerLogger.Println(err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	return nil
+}
+
+func discordAlert(alert AlertParams) error {
+	var DefaultAlertMessageDiscord = `
+{
+  "content": "%s",
+  "username": "%s",
+  "avatar_url": "https://rpeat.io/assets/img/rpeat-icon.png",
+  "embeds": [
+    {
+      "title": "{{ .Name }}",
+      "description": "*{{ .JobStateString }}*",
+      "color": 65280,
+      "fields": [
+        {
+          "name": "Cmd",
+          "value": {{ .CmdEval }},
+          "inline": false
+        },
+        {
+          "name": "Elapsed",
+          "value": "{{ .Elapsed }}",
+          "inline": true
+        },
+        {
+          "name": "ExitCode",
+          "value": "{{ .ExitCode }}",
+          "inline": true
+        },
+        {
+          "name": "",
+          "value": "",
+          "inline": true
+        },
+        {
+          "name": "Started",
+          "value": "{{ .Started }}",
+          "inline": true
+        },
+        {
+          "name": "Ended",
+          "value": "{{ .PrevStop }}",
+          "inline": true
+        },
+        {
+          "name": "Timezone",
+          "value": "{{ .Timezone }}",
+          "inline": true
+        },
+        {
+          "name": "JobUUID",
+          "value": "{{ .JobUUID }}",
+          "inline": false
+        },
+        {
+          "name": "RunUUID",
+          "value": "{{ .RunUUID }}",
+          "inline": false
+        }
+      ],
+      "footer": {
+        "text": "Powered by rpeat®"
+      }
+    }
+  ]
+}
+`
+	username := fmt.Sprintf("rpeat-%s", alert.ServerName)
+	if alert.Alert.From != nil {
+		username = fmt.Sprintf("%s", *alert.Alert.From)
+	}
+	content := ""
+	if alert.Alert.To != nil {
+		var tos []string
+		for _, to := range alert.Alert.To {
+			if to != nil {
+				tos = append(tos, *to)
+			}
+		}
+		content = fmt.Sprintf("<%s>", strings.Join(tos, "> <"))
+	}
+	DefaultAlertMessageDiscord = fmt.Sprintf(DefaultAlertMessageDiscord, content, username)
+
+	var msgBuf bytes.Buffer
+	tmpl, _ := template.New("Msg").Parse(DefaultAlertMessageDiscord)
+	alert.CmdEval = strconv.Quote(alert.CmdEval)
+	tmpl.Execute(&msgBuf, alert)
+
+	msgBuf = *(bytes.NewBuffer(replaceHTML(msgBuf.Bytes())))
+
+	ServerLogger.Printf("Sending Endpoint: %s", alert.Endpoint)
+
+	req, _ := http.NewRequest("POST", alert.Endpoint, &msgBuf)
+	req.Header.Set("Content-Type", "application/json") // Set headers
+
+	client := &http.Client{Timeout: 10 * time.Second} // Set timeout
+	resp, err := client.Do(req)
+	if err != nil {
+		ServerLogger.Println(err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	return nil
+}
+
+func slackAlert(alert AlertParams) error {
+	var DefaultAlertMessageSlack = `
+{
+	"blocks": [
+		{
+			"type": "card",
+            "icon": {
+				"type": "image",
+				"image_url": "https://rpeat.io/assets/img/rpeat-icon-34x36.png",
+				"alt_text": "rpeat icon"
+			},
+			"title": {
+				"type": "mrkdwn",
+				"text": "{{ .Name }}",
+				"verbatim": false
+			},
+			"subtitle": {
+				"type": "mrkdwn",
+				"text": "{{ .JobStateString }}",
+				"verbatim": false
+			},
+			"body": {
+				"type": "mrkdwn",
+				"text": "*Cmd:*   {{ .CmdEval }}",
+				"verbatim": false
+			}
+		},
+        {
+			"type": "section",
+            "fields": [
+				{
+					"type": "mrkdwn",
+					"text": "*Elapsed:* {{ .Elapsed }}"
+				},
+				{
+					"type": "mrkdwn",
+					"text": "*ExitCode:* {{ .ExitCode }}"
+				},
+				{
+					"type": "mrkdwn",
+					"text": "*Started:* {{ .Started }}"
+				},
+				{
+					"type": "mrkdwn",
+					"text": "*Ended:* {{ .PrevStop }}"
+				},
+				{
+					"type": "mrkdwn",
+					"text": "*Timezone:* {{ .Timezone }}"
+				},
+				{
+					"type": "mrkdwn",
+					"text": " "
+				},
+				{
+					"type": "mrkdwn",
+					"text": "*JobUUID:* {{ .JobUUID }}"
+				},
+				{
+					"type": "mrkdwn",
+					"text": "*RunUUID:* {{ .JobUUID }}"
+				}
+            ]
+        },
+		{
+			"type": "context",
+			"elements": [
+				{
+					"type": "mrkdwn",
+					"text": "rpeat-{{ .ServerName }} | Powered by rpeat®"
+				}
+			]
+		}
+	]
+}
+`
+	var msgBuf bytes.Buffer
+	tmpl, _ := template.New("Msg").Parse(DefaultAlertMessageSlack)
+	alert.CmdEval = fixQuotes(alert.CmdEval)
+	tmpl.Execute(&msgBuf, alert)
+	msgBuf = *(bytes.NewBuffer(replaceHTML(msgBuf.Bytes())))
+
+	req, _ := http.NewRequest("POST", alert.Endpoint, &msgBuf)
+	req.Header.Set("Content-Type", "application/json") // Set headers
+
+	client := &http.Client{Timeout: 10 * time.Second} // Set timeout
+	resp, err := client.Do(req)
+	ServerLogger.Println(resp)
+	if err != nil {
+		ServerLogger.Println(err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	return nil
 }
